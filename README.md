@@ -30,6 +30,18 @@ These requirements will be verified by automated and manual tests before any rel
 
 Svelte, TypeScript and Vite, built as a static site. Tests use Vitest and Playwright.
 
+## Development
+
+Requires Node.js 24 or later, pnpm, and Firefox installed in its default location (the Firefox tests use it).
+
+```bash
+pnpm install
+pnpm exec playwright install chromium webkit   # browsers for the end-to-end tests
+pnpm test                      # unit tests
+pnpm check                     # type checking
+pnpm test:e2e                  # builds the site and runs browser tests
+```
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE). The license does not grant rights to the Rememberphrase name.
