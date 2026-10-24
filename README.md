@@ -40,8 +40,11 @@ pnpm exec playwright install chromium webkit   # browsers for the end-to-end tes
 pnpm test                      # unit tests
 pnpm check                     # type checking
 pnpm test:e2e                  # builds the site and runs browser tests
+./scripts/verify-wp00.mjs      # checks the WP00 decisions and word-list evidence
 ```
+
+Approved project decisions are recorded in [docs/decisions](docs/decisions).
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE). The license does not grant rights to the Rememberphrase name.
+Licensed under the [Apache License 2.0](LICENSE). The license does not grant rights to the Rememberphrase name. The English word list is the EFF Long Wordlist (CC BY 4.0); see [ATTRIBUTION.md](ATTRIBUTION.md).

@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 async function loadList(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Load word list' }).click();
-  await expect(page.getByText('Word list ready in this tab (10 words).')).toBeVisible();
+  await expect(page.getByText('Word list ready in this tab (7776 words).')).toBeVisible();
 }
 
 async function confirmOffline(page: Page) {
@@ -29,6 +29,7 @@ async function confirmOffline(page: Page) {
 }
 
 const sampleButton = (page: Page) => page.getByRole('button', { name: 'Generate disposable sample' });
+const band = (page: Page) => page.locator('.band');
 
 async function expectNoCspViolations(page: Page) {
   expect(await page.evaluate(() => window.cspViolations)).toEqual([]);
@@ -53,7 +54,7 @@ test('build has exactly one JS and one CSS file', () => {
   expect(files.filter((f) => f.endsWith('.css'))).toHaveLength(1);
 });
 
-test('offline: check is inconclusive, then samples make no requests and store nothing', async ({ page, context }) => {
+test('offline: no answer, then samples make no requests, store nothing and reach green', async ({ page, context }) => {
   await loadList(page);
   await context.setOffline(true);
   const requests: string[] = [];
@@ -69,56 +70,70 @@ test('offline: check is inconclusive, then samples make no requests and store no
   const samples = page.getByRole('list', { name: /Disposable sample/ });
   await expect(samples).toHaveCount(2);
   const [first, second] = await samples.allInnerTexts();
-  expect(first).not.toBe(second); // 1 in 10^6 chance of a false failure with the 10-word fixture
+  expect(first).not.toBe(second);
   expect(requests).toEqual([]);
+  await expect(band(page)).toHaveText(/^Ready: You confirmed offline/);
 
   await expectNoStorage(page, context);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expectNoCspViolations(page);
+
+  // D7 row 2: coming back online after confirmation pauses generation.
+  await context.setOffline(false);
+  await expect(band(page)).toHaveText(/^Hold: Your browser reported a connection/);
+  await expect(sampleButton(page)).toBeDisabled();
 });
 
-test('online: a reachable site holds generation, and a later offline check is not a cached replay', async ({ page, context }) => {
+test('online: Rememberphrase answering holds generation, and a later offline check is not a cached replay', async ({ page, context }) => {
   await loadList(page);
   const probe = page.waitForRequest('**/reachability.txt?*');
   await confirmOffline(page);
   const headers = await (await probe).allHeaders();
   expect(headers.cookie).toBeUndefined();
   expect(headers.referer).toBeUndefined();
-  await expect(page.getByText(/a connection may be active/)).toBeVisible();
+  await expect(band(page)).toHaveText(/^Hold: Rememberphrase answered/);
   await expect(sampleButton(page)).toBeDisabled();
 
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Confirm offline' }).click();
   await expect(page.getByText(/Could not reach Rememberphrase/)).toBeVisible();
+  await expect(sampleButton(page)).toBeEnabled();
   await expectNoCspViolations(page);
 });
 
-test('skip cancels a pending check and is labelled as skipped', async ({ page }) => {
+test('skip cancels a pending check and is labelled as skipped', async ({ page, context }) => {
   await page.route('**/reachability.txt?*', () => {}); // never answers
   await loadList(page);
   await confirmOffline(page);
   await expect(page.getByRole('dialog', { name: 'Confirming offline' })).toBeVisible();
   await page.getByRole('button', { name: "Skip, I'm offline" }).click();
-  await expect(page.getByText('You skipped the connection check.')).toBeVisible();
   await expect(sampleButton(page)).toBeEnabled();
+  await context.setOffline(true);
+  await sampleButton(page).click();
+  await expect(band(page)).toHaveText(/^Caution: You skipped the connection check/);
   await expectNoCspViolations(page);
 });
 
 for (const [name, response] of [
-  ['a redirect', { status: 302, headers: { location: '/' } }],
-  ['an unexpected body', { status: 200, body: 'captive portal' }],
+  ['a redirect', { status: 302, headers: { location: 'https://example.com/login' } }],
+  ['an error status', { status: 503, body: 'Service unavailable' }],
+  ['a captive-portal page', { status: 200, body: '<html>Log in to Wi-Fi</html>' }],
 ] as const) {
-  test(`${name} is inconclusive, not reachable`, async ({ page, browserName }) => {
+  test(`${name} means a network answered and holds generation`, async ({ page, browserName }) => {
     test.skip(name === 'a redirect' && browserName === 'webkit', 'Playwright cannot fake redirects in WebKit');
+    const followed: string[] = [];
+    page.on('request', (r) => r.url().startsWith('https://example.com') && followed.push(r.url()));
     await page.route('**/reachability.txt?*', (route) => route.fulfill(response));
     await loadList(page);
     await confirmOffline(page);
-    await expect(page.getByText(/Could not reach Rememberphrase/)).toBeVisible();
+    await expect(band(page)).toHaveText(/^Hold: A network answered/);
+    await expect(sampleButton(page)).toBeDisabled();
+    expect(followed).toEqual([]);
   });
 }
 
 test('a tampered word list is rejected', async ({ page }) => {
-  await page.route('**/wordlists/fixture-en.txt', (route) => route.fulfill({ body: 'alfa\nbravo\n' }));
+  await page.route('**/wordlists/eff-large-en.txt', (route) => route.fulfill({ body: 'alfa\nbravo\n' }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Load word list' }).click();
   await expect(page.getByText('The word list does not match the expected version.')).toBeVisible();
