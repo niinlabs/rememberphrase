@@ -23,6 +23,16 @@ async function reachCompose(page: Page, context: BrowserContext) {
   return words;
 }
 
+// Lets a test make the random source throw on demand (window.failRandom), after preparation succeeded.
+function failableRandom() {
+  const real = crypto.getRandomValues.bind(crypto);
+  (window as unknown as { failRandom: boolean }).failRandom = false;
+  crypto.getRandomValues = ((array: Uint32Array<ArrayBuffer>) => {
+    if ((window as unknown as { failRandom: boolean }).failRandom) throw new Error('random source failed');
+    return real(array);
+  }) as typeof crypto.getRandomValues;
+}
+
 // Drags with real pointer events from one element's centre to just before another's left edge.
 async function dragTo(page: Page, from: Locator, before: Locator) {
   await from.scrollIntoViewIfNeeded();
@@ -177,6 +187,60 @@ test('locks show on Make it Yours but do not stop editing', async ({ page, conte
   await expect(tiles(page).nth(2)).toContainText(copy.compose.lockedNote);
   await field(page, 3).fill(`${words[2]}!`);
   await expect(preview(page)).toContainText(`${words[2]}!`);
+});
+
+test('removing a selected connecting word clears the selection without errors', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const words = await reachCompose(page, context);
+  await page.getByRole('region', { name: copy.compose.connectorsTitle }).getByRole('button', { name: 'with', exact: true }).click();
+  await page.getByRole('button', { name: copy.compose.insertHere('with', 2) }).click();
+  await handle(page, 'with').click(); // select the inserted connector for moving
+  await expect(page.getByText(copy.compose.placingWord('with'))).toBeVisible();
+  await page.getByRole('button', { name: copy.compose.remove('with') }).click();
+  await expect(preview(page)).toHaveText(words.join(' '));
+  // The selection itself is gone, not just its text: no Cancel and no "Move here" spots remain.
+  await expect(page.getByRole('button', { name: copy.compose.cancelPlacing })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Move here/ })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a word edited before joining can still be split, keeping the edit', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await field(page, 1).fill(`${words[0]}1`);
+  await page.getByRole('button', { name: `${copy.compose.join}: ${words[0]}1` }).click();
+  await page.getByRole('button', { name: `${copy.compose.split}: ${words[0]}1${words[1]}` }).click();
+  await expect(preview(page)).toHaveText([`${words[0]}1`, ...words.slice(1)].join(' '));
+});
+
+test('an invalid edit on its own can be reset', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await field(page, 2).fill('');
+  const reset = page.getByRole('button', { name: copy.compose.reset });
+  await expect(reset).toBeEnabled();
+  await reset.click();
+  await expect(field(page, 2)).toHaveValue(words[1]);
+  await expect(reset).toBeDisabled();
+});
+
+test('a character inserted between the original letters counts as an edit', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await field(page, 1).fill(`${words[0].slice(0, 2)}1${words[0].slice(2)}`);
+  await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
+});
+
+test('a failed Start fresh keeps the phrase, returns to Generate and holds drawing', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(failableRandom);
+  const words = await reachCompose(page, context);
+  await page.evaluate(() => ((window as unknown as { failRandom: boolean }).failRandom = true));
+  await page.getByRole('button', { name: copy.compose.startFresh }).click();
+  await page.getByRole('alertdialog', { name: copy.warn.freshTitle }).getByRole('button', { name: copy.warn.freshConfirm }).click();
+  await expect(page.getByRole('heading', { level: 1, name: copy.generate.heading })).toBeVisible();
+  await expect(page.getByTestId('status-band')).toContainText(copy.band['local-check-failed']);
+  expect((await page.locator('.tiles .word').allInnerTexts()).map((w) => w.trim())).toEqual(words);
+  expect(errors).toEqual([]);
 });
 
 test('composing makes no requests and stores nothing; narrow screens work and pass accessibility checks', async ({ page, context }) => {

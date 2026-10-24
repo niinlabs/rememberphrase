@@ -157,7 +157,7 @@ export const copy = {
     unconfirmed: 'Offline status not confirmed. Go offline, then confirm.',
     'local-check': 'Checking that this tab can make words…',
     'local-check-failed':
-      "This tab couldn't make test words, so preparation is held. Try the check again. If it keeps failing, reload the page while online.",
+      "This tab couldn't make random words just now, so making words is held. Try the check again. If it keeps failing, reload the page while online.",
     skipped: 'You skipped the connection check. You confirmed offline, and the word list is ready in this tab.',
     'browser-online': 'Your browser still reports a network connection. This can be a VPN or virtual adapter; check Airplane mode.',
     green: 'You confirmed offline, and the word list is ready in this tab.',

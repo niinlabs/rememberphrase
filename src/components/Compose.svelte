@@ -36,7 +36,8 @@
     status,
     phrase = $bindable(),
     onback,
-  }: { words: string[]; status: Status; phrase: Phrase; onback: () => void } = $props();
+    ondrawfailed,
+  }: { words: string[]; status: Status; phrase: Phrase; onback: () => void; ondrawfailed: () => void } = $props();
 
   // Something being moved: an existing token, or a connector taken from the tray.
   type Item = { kind: 'token'; id: string } | { kind: 'connector'; text: Connector };
@@ -144,6 +145,12 @@
     phrase = edit(phrase, id, value);
   }
 
+  // Joining, splitting and removing replace tokens, so a selection pointing at them is cleared.
+  function change(next: Phrase) {
+    placing = null;
+    phrase = next;
+  }
+
   function resetChanges() {
     phrase = reset(phrase);
     errors = {};
@@ -154,7 +161,12 @@
   function startFresh() {
     freshOpen = false;
     if (!status.canGenerate) return;
-    phrase = generate(phrase.slots.length, drawFrom(words));
+    try {
+      phrase = generate(phrase.slots.length, drawFrom(words));
+    } catch {
+      ondrawfailed(); // the current phrase stays; Generate explains and offers the retry
+      return;
+    }
     errors = {};
     onback();
   }
@@ -181,7 +193,7 @@
   <p class="placing" role="status">
     {placing.kind === 'connector'
       ? copy.compose.placingConnector(placing.text)
-      : copy.compose.placingWord(phrase.tokens[indexOf(placing.id)].text)}
+      : copy.compose.placingWord(phrase.tokens[indexOf(placing.id)]?.text ?? '')}
     <button class="link" onclick={() => (placing = null)}>{copy.compose.cancelPlacing}</button>
   </p>
 {/if}
@@ -236,11 +248,11 @@
         {#if errors[token.id]}<p class="error" id="err-{token.id}">{copy.compose.wordErrors[errors[token.id]]}</p>{/if}
         <div class="actions">
           {#if canSplit(phrase, token.id)}
-            <button class="small" aria-label="{copy.compose.split}: {token.text}" onclick={() => (phrase = split(phrase, token.id))}>
+            <button class="small" aria-label="{copy.compose.split}: {token.text}" onclick={() => change(split(phrase, token.id))}>
               {copy.compose.split}
             </button>
           {:else if canCombine(phrase, token.id)}
-            <button class="small" aria-label="{copy.compose.join}: {token.text}" onclick={() => (phrase = combine(phrase, token.id))}>
+            <button class="small" aria-label="{copy.compose.join}: {token.text}" onclick={() => change(combine(phrase, token.id))}>
               {copy.compose.join}
             </button>
           {/if}
@@ -248,7 +260,7 @@
       {:else}
         <span class="connector-text">{token.text}</span>
         <div class="actions">
-          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => (phrase = removeConnector(phrase, token.id))}>
+          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeConnector(phrase, token.id))}>
             <Icon name="close" size={16} />
             {copy.compose.remove('')}
           </button>
@@ -319,7 +331,10 @@
     <Icon name="back" />
     {copy.compose.back}
   </button>
-  <button class="button secondary" onclick={resetChanges} disabled={!hasEdits(phrase)}>{copy.compose.reset}</button>
+  <!-- Invalid input waiting in a field also counts as a change to undo. -->
+  <button class="button secondary" onclick={resetChanges} disabled={!hasEdits(phrase) && Object.keys(errors).length === 0}>
+    {copy.compose.reset}
+  </button>
   <button class="button secondary" onclick={() => (freshOpen = true)} disabled={!status.canGenerate}>{copy.compose.startFresh}</button>
   <p>{copy.compose.nextStep}</p>
 </div>

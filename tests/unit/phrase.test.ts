@@ -138,7 +138,9 @@ describe('editing and provenance (D8, D10)', () => {
     const p = six();
     const at = (text: string) => origin(edit(p, 'w0', text), edit(p, 'w0', text).tokens[0]);
     expect(origin(p, p.tokens[0])).toBe('unchanged');
-    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES']) expect(at(t), t).toBe('edited');
+    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES', 'map1le', 'm-a-p-l-e']) expect(at(t), t).toBe('edited');
+    const ex = generate(4, sequence('exorcism', 'orbit', 'lantern', 'velvet'));
+    expect(origin(edit(ex, 'w0', 'ex1orcism'), edit(ex, 'w0', 'ex1orcism').tokens[0])).toBe('edited'); // inserted between letters
     for (const t of ['sunshine', 'mplae', 'map']) expect(at(t), t).toBe('rewritten');
   });
 
@@ -183,6 +185,17 @@ describe('combining and splitting (D12)', () => {
     expect(() => split(p, 'w0+w1')).toThrow(RangeError);
     expect(origin(p, p.tokens[0])).toBe('edited');
     expect(intactRandomWords(p)).toBe(4);
+  });
+
+  test('a word edited before joining still splits back, keeping the edit and the other intact draw', () => {
+    let p = combine(edit(six(), 'w0', 'Maple1'), 'w0');
+    expect(texts(p)[0]).toBe('Maple1orbit');
+    expect(canSplit(p, 'w0+w1')).toBe(true);
+    expect(origin(p, p.tokens[0])).toBe('edited');
+    expect(intactRandomWords(p)).toBe(5); // orbit is still an untouched draw
+    p = split(p, 'w0+w1');
+    expect(texts(p)).toEqual(['Maple1', 'orbit', 'lantern', 'velvet', 'stork', 'delay']);
+    expect(intactRandomWords(p)).toBe(5);
   });
 
   test('a lock protects a word from rerolls, not from combining, editing or moving', () => {

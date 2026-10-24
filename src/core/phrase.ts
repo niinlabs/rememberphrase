@@ -17,8 +17,9 @@ export type Draw = () => string;
 // A random draw. Its word changes only by reroll; locks protect it from rerolls, not from editing.
 export type Slot = { id: number; word: string; locked: boolean };
 // What the user arranges: one or two generated slots (combined), or a user-chosen connector.
+// A joined word keeps each part's text as it was when joined, so it can be split back exactly.
 export type Token =
-  | { kind: 'word'; id: string; slots: number[]; text: string }
+  | { kind: 'word'; id: string; slots: number[]; text: string; parts?: string[] }
   | { kind: 'connector'; id: string; text: Connector };
 // slots in generated order are the reset baseline; tokens and separator are the step-3 draft.
 export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; nextId: number };
@@ -148,20 +149,27 @@ export function combine(p: Phrase, tokenId: string): Phrase {
   if (!canCombine(p, tokenId)) throw new RangeError('These words cannot be combined');
   const i = indexOf(p, tokenId);
   const [a, b] = p.tokens.slice(i, i + 2) as Extract<Token, { kind: 'word' }>[];
-  const joined: Token = { kind: 'word', id: `${a.id}+${b.id}`, slots: [...a.slots, ...b.slots], text: a.text + b.text };
+  const joined: Token = {
+    kind: 'word',
+    id: `${a.id}+${b.id}`,
+    slots: [...a.slots, ...b.slots],
+    text: a.text + b.text,
+    parts: [a.text, b.text],
+  };
   return { ...p, tokens: [...p.tokens.slice(0, i), joined, ...p.tokens.slice(i + 2)] };
 }
 
-// D12: only an untouched combination can be split; Reset is the way back after an edit.
+// D12: a combination can be split while its text is unchanged since joining; Reset is the way back after an edit.
 export function canSplit(p: Phrase, tokenId: string) {
   const token = p.tokens[indexOf(p, tokenId)];
-  return token.kind === 'word' && token.slots.length === 2 && token.text === originalText(p, token);
+  return token.kind === 'word' && !!token.parts && token.text === token.parts.join('');
 }
 
 export function split(p: Phrase, tokenId: string): Phrase {
   if (!canSplit(p, tokenId)) throw new RangeError('Only an unchanged combination can be split');
   const i = indexOf(p, tokenId);
-  const parts = (p.tokens[i] as Extract<Token, { kind: 'word' }>).slots.map((id) => wordToken(p.slots.find((s) => s.id === id)!));
+  const joined = p.tokens[i] as Extract<Token, { kind: 'word' }>;
+  const parts: Token[] = joined.slots.map((id, k) => ({ kind: 'word', id: `w${id}`, slots: [id], text: joined.parts![k] }));
   return { ...p, tokens: [...p.tokens.slice(0, i), ...parts, ...p.tokens.slice(i + 1)] };
 }
 
@@ -189,11 +197,11 @@ const LOOKALIKES: Record<string, string> = { a: 'a4@', e: 'e3', i: 'i1!', l: 'l1
 const escape = (c: string) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Approved rule (WP02, 2026-10-24): "edited" means the original letters are still there in order,
-// allowing case changes, familiar substitutions and characters added around them; anything else
-// counts as user-written. Strength (D8) is unaffected: both lose intact status.
+// allowing case changes, familiar substitutions and characters added anywhere (before, after or
+// between them); anything else counts as user-written. Strength (D8) is unaffected: both lose intact status.
 function stillRecognisable(text: string, original: string) {
-  const pattern = [...original.toLowerCase()].map((c) => (LOOKALIKES[c] ? `[${escape(LOOKALIKES[c])}]` : escape(c))).join('');
-  return new RegExp(pattern, 'iu').test(text);
+  const letters = [...original.toLowerCase()].map((c) => (LOOKALIKES[c] ? `[${escape(LOOKALIKES[c])}]` : escape(c)));
+  return new RegExp(letters.join('.*?'), 'isu').test(text);
 }
 
 export function origin(p: Phrase, token: Token): Origin {
@@ -203,9 +211,14 @@ export function origin(p: Phrase, token: Token): Origin {
   return stillRecognisable(token.text, original) ? 'edited' : 'rewritten';
 }
 
-// D8: generated words whose text is unchanged; an unchanged combination counts as two.
-export const intactRandomWords = (p: Phrase) =>
-  p.tokens.reduce((n, t) => {
-    const o = origin(p, t);
-    return n + (o === 'unchanged' || o === 'combined' ? (t as Extract<Token, { kind: 'word' }>).slots.length : 0);
-  }, 0);
+// D8: generated words whose text is unchanged. A combination unchanged since joining counts each
+// part that was itself unchanged; editing the joined text removes intact status from both.
+export function intactRandomWords(p: Phrase) {
+  let n = 0;
+  for (const t of p.tokens) {
+    if (t.kind !== 'word') continue;
+    if (t.text === originalText(p, t)) n += t.slots.length;
+    else if (t.parts && t.text === t.parts.join('')) n += t.slots.filter((id, k) => t.parts![k] === slotWord(p, id)).length;
+  }
+  return n;
+}

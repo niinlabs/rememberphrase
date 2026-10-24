@@ -29,7 +29,26 @@
     phrase = $bindable(),
     onback,
     oncontinue,
-  }: { words: string[]; status: Status; phrase: Phrase | null; onback: () => void; oncontinue: () => void } = $props();
+    ondrawfailed,
+    onretry,
+  }: {
+    words: string[];
+    status: Status;
+    phrase: Phrase | null;
+    onback: () => void;
+    oncontinue: () => void;
+    ondrawfailed: () => void;
+    onretry: () => void;
+  } = $props();
+
+  // A draw either completes or leaves the phrase as it was; a failure holds further draws.
+  function attempt(action: () => void) {
+    try {
+      action();
+    } catch {
+      ondrawfailed();
+    }
+  }
 
   // An upstream change that would discard the arranged phrase waits here until the user confirms.
   let pendingDiscard = $state<(() => void) | null>(null);
@@ -53,7 +72,7 @@
   // Every draw checks the connection status at the moment of the click (D7).
   function primary() {
     guardEdits(() => {
-      if (status.canGenerate) phrase = phrase ? reroll(phrase, draw) : generate(pendingCount, draw);
+      if (status.canGenerate) attempt(() => (phrase = phrase ? reroll(phrase!, draw) : generate(pendingCount, draw)));
     });
   }
 
@@ -68,7 +87,7 @@
     if (needed > 0) countMessage = copy.generate.unlocksNeeded(needed, next);
     else
       guardEdits(() => {
-        if (next < phrase!.slots.length || status.canGenerate) phrase = setCount(phrase!, next, draw);
+        if (next < phrase!.slots.length || status.canGenerate) attempt(() => (phrase = setCount(phrase!, next, draw)));
       });
   }
 </script>
@@ -77,6 +96,9 @@
 <p class="intro">{copy.generate.intro}</p>
 
 <StatusBand {status} />
+{#if status.colour === 'amber' && !status.canGenerate && status.reason === 'local-check-failed'}
+  <button class="button primary retry" onclick={onretry}>{copy.offline.retryCheck}</button>
+{/if}
 
 <div class="count-row">
   <span class="count-label" id="count-label">{copy.generate.countLabel}</span>
@@ -189,6 +211,9 @@
     color: var(--ink-soft);
   }
 
+  .retry {
+    margin-top: 0.75rem;
+  }
   .count-row {
     display: flex;
     flex-wrap: wrap;

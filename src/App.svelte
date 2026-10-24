@@ -101,6 +101,13 @@
     if (canRunLocalCheck(readiness)) localCheck();
   }
 
+  // A real draw that throws means the random source cannot be trusted right now: hold every
+  // further draw (D7 row 3) until a retried check succeeds. The phrase on screen is untouched.
+  function drawFailed() {
+    localCheckOk = false;
+    localCheckFailed = true;
+  }
+
   function online() {
     browserOnline = true;
     if (probe === null) return;
@@ -161,9 +168,26 @@
   <main class="card">
     <section class="work" aria-labelledby="page-title">
       {#if step === 'generate' && words}
-        <Generate {words} {status} bind:phrase onback={() => goTo('prepare')} oncontinue={() => goTo('compose')} />
+        <Generate
+          {words}
+          {status}
+          bind:phrase
+          onback={() => goTo('prepare')}
+          oncontinue={() => goTo('compose')}
+          ondrawfailed={drawFailed}
+          onretry={retryLocalCheck}
+        />
       {:else if step === 'compose' && words && phrase}
-        <Compose {words} {status} bind:phrase onback={() => goTo('generate')} />
+        <Compose
+          {words}
+          {status}
+          bind:phrase
+          onback={() => goTo('generate')}
+          ondrawfailed={() => {
+            drawFailed();
+            goTo('generate');
+          }}
+        />
       {:else}
       <h1 id="page-title" tabindex="-1">{copy.heading}</h1>
       <p class="intro">{copy.intro}</p>

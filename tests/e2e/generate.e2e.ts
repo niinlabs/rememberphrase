@@ -139,6 +139,50 @@ test('reconnecting on Generate holds drawing; Acknowledge returns to Go offline 
   expect(await shown(page)).toEqual(words);
 });
 
+test('a failed draw holds drawing with a reason and a retry, and never changes the words shown', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    const real = crypto.getRandomValues.bind(crypto);
+    (window as unknown as { failRandom: boolean }).failRandom = false;
+    crypto.getRandomValues = ((array: Uint32Array<ArrayBuffer>) => {
+      if ((window as unknown as { failRandom: boolean }).failRandom) throw new Error('random source failed');
+      return real(array);
+    }) as typeof crypto.getRandomValues;
+  });
+  const fail = (on: boolean) => page.evaluate((v) => ((window as unknown as { failRandom: boolean }).failRandom = v), on);
+  const band = page.getByTestId('status-band');
+  const retry = page.getByRole('button', { name: copy.offline.retryCheck });
+  await reachGenerate(page, context);
+
+  // Initial generation fails: nothing appears, drawing is held, the reason and the retry are shown.
+  await fail(true);
+  await page.getByRole('button', { name: copy.generate.generate }).click();
+  await expect(band).toContainText(copy.band['local-check-failed']);
+  await expect(page.getByRole('button', { name: copy.generate.generate })).toBeDisabled();
+  await expect(tiles(page)).toHaveCount(0);
+  await retry.click(); // still failing: stays held
+  await expect(band).toContainText(copy.band['local-check-failed']);
+  await fail(false);
+  await retry.click();
+  await expect(band).toContainText(copy.band.green);
+  const words = await generateWords(page);
+
+  // A failing reroll or count increase leaves the words as they were.
+  await fail(true);
+  await page.getByRole('button', { name: copy.generate.newWords }).click();
+  await expect(band).toContainText(copy.band['local-check-failed']);
+  expect(await shown(page)).toEqual(words);
+  await fail(false);
+  await retry.click();
+  await fail(true);
+  await page.getByRole('button', { name: copy.generate.more }).click();
+  await expect(band).toContainText(copy.band['local-check-failed']);
+  await expect(count(page)).toHaveText('6');
+  expect(await shown(page)).toEqual(words);
+  expect(errors).toEqual([]);
+});
+
 test('Back keeps the words for when you return', async ({ page, context }) => {
   await reachGenerate(page, context);
   const words = await generateWords(page);
