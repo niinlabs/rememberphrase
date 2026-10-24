@@ -198,6 +198,24 @@ describe('combining and splitting (D12)', () => {
     expect(intactRandomWords(p)).toBe(5);
   });
 
+  test('joining edited words never restores credit, even when the join spells the original words', () => {
+    // As reported: "dinghy" + "geranium" edited to "dinghyg" + "eranium", then joined into "dinghygeranium".
+    let p = generate(4, sequence('dinghy', 'geranium', 'lantern', 'velvet'));
+    p = edit(edit(p, 'w0', 'dinghyg'), 'w1', 'eranium');
+    expect(intactRandomWords(p)).toBe(2);
+    p = combine(p, 'w0');
+    expect(texts(p)[0]).toBe('dinghygeranium');
+    expect(intactRandomWords(p)).toBe(2);
+    expect(origin(p, p.tokens[0])).toBe('edited');
+  });
+
+  test('editing a join back to its joined text restores only what the parts had', () => {
+    let p = combine(six(), 'w0');
+    p = edit(edit(p, 'w0+w1', 'mapleorbit!'), 'w0+w1', 'mapleorbit');
+    expect(intactRandomWords(p)).toBe(6);
+    expect(origin(p, p.tokens[0])).toBe('combined');
+  });
+
   test('a lock protects a word from rerolls, not from combining, editing or moving', () => {
     let p = toggleLock(six(), 0);
     p = move(edit(combine(p, 'w0'), 'w0+w1', 'Mapleorbit'), 'w0+w1', 3);

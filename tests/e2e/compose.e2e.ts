@@ -213,6 +213,20 @@ test('a word edited before joining can still be split, keeping the edit', async 
   await expect(preview(page)).toHaveText([`${words[0]}1`, ...words.slice(1)].join(' '));
 });
 
+test('joining edited words that spell the original never restores random-word credit', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  // Move the second word's first letter onto the first word, as in "dinghyg" + "eranium".
+  await field(page, 1).fill(words[0] + words[1][0]);
+  await field(page, 2).fill(words[1].slice(1));
+  const joined = words[0] + words[1];
+  const length = [joined, ...words.slice(2)].join(' ').length;
+  await expect(page.getByText(copy.compose.counts(4, 6, 0, words.join(' ').length))).toBeVisible();
+  await page.getByRole('button', { name: `${copy.compose.join}: ${words[0] + words[1][0]}` }).click();
+  await expect(preview(page)).toHaveText([joined, ...words.slice(2)].join(' '));
+  await expect(page.getByText(copy.compose.counts(4, 6, 0, length))).toBeVisible();
+  await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
+});
+
 test('an invalid edit on its own can be reset', async ({ page, context }) => {
   const words = await reachCompose(page, context);
   await field(page, 2).fill('');

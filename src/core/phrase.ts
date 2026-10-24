@@ -204,21 +204,21 @@ function stillRecognisable(text: string, original: string) {
   return new RegExp(letters.join('.*?'), 'isu').test(text);
 }
 
-export function origin(p: Phrase, token: Token): Origin {
-  if (token.kind === 'connector') return 'connector';
-  const original = originalText(p, token);
-  if (token.text === original) return token.slots.length === 2 ? 'combined' : 'unchanged';
-  return stillRecognisable(token.text, original) ? 'edited' : 'rewritten';
+// How many random draws behind a token are still exactly as drawn. A joined word is judged only by
+// the parts saved when it was joined, and only while its text is unchanged since joining: typing a
+// join that happens to spell the original words never restores credit lost before joining.
+function intactDraws(p: Phrase, token: Token) {
+  if (token.kind !== 'word') return 0;
+  if (!token.parts) return token.text === originalText(p, token) ? 1 : 0;
+  if (token.text !== token.parts.join('')) return 0;
+  return token.slots.filter((id, k) => token.parts![k] === slotWord(p, id)).length;
 }
 
-// D8: generated words whose text is unchanged. A combination unchanged since joining counts each
-// part that was itself unchanged; editing the joined text removes intact status from both.
-export function intactRandomWords(p: Phrase) {
-  let n = 0;
-  for (const t of p.tokens) {
-    if (t.kind !== 'word') continue;
-    if (t.text === originalText(p, t)) n += t.slots.length;
-    else if (t.parts && t.text === t.parts.join('')) n += t.slots.filter((id, k) => t.parts![k] === slotWord(p, id)).length;
-  }
-  return n;
+export function origin(p: Phrase, token: Token): Origin {
+  if (token.kind === 'connector') return 'connector';
+  if (intactDraws(p, token) === token.slots.length) return token.parts ? 'combined' : 'unchanged';
+  return stillRecognisable(token.text, originalText(p, token)) ? 'edited' : 'rewritten';
 }
+
+// D8: random draws whose text is unchanged, counted through intactDraws.
+export const intactRandomWords = (p: Phrase) => p.tokens.reduce((n, t) => n + intactDraws(p, t), 0);
