@@ -3,11 +3,14 @@
 // offline-check fixtures. Prints PASS, FAIL or BLOCKED per check; exits non-zero unless all pass.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { effLargeList } from '../src/wordlists.ts';
 
 const root = new URL('..', import.meta.url);
+const REQUIRED_FIXTURES = ['tests/unit/status.test.ts', 'tests/unit/reachability.test.ts'];
 const read = (path) => readFileSync(new URL(path, root));
 const results = [];
 
@@ -45,8 +48,22 @@ check('word list is attributed', () => {
 });
 
 check('decision-table and offline-check fixtures pass', () => {
-  const run = spawnSync('pnpm', ['exec', 'vitest', 'run'], { cwd: fileURLToPath(root), encoding: 'utf8' });
+  const missing = REQUIRED_FIXTURES.filter((f) => !existsSync(new URL(f, root)));
+  if (missing.length) return `missing ${missing.join(', ')}`;
+  const out = join(mkdtempSync(join(tmpdir(), 'verify-wp00-')), 'results.json');
+  const run = spawnSync('pnpm', ['exec', 'vitest', 'run', '--reporter=json', `--outputFile=${out}`], {
+    cwd: fileURLToPath(root),
+    encoding: 'utf8',
+  });
   if (run.error) return ['BLOCKED', `could not run the tests (${run.error.message})`];
+  if (!existsSync(out)) return ['BLOCKED', 'the test runner produced no results'];
+  // Each required fixture must have run and passed at least one test, so an emptied or skipped file fails too.
+  const { testResults } = JSON.parse(readFileSync(out, 'utf8'));
+  for (const fixture of REQUIRED_FIXTURES) {
+    const file = testResults.find((t) => t.name.endsWith(fixture));
+    const passed = file?.assertionResults.filter((a) => a.status === 'passed').length ?? 0;
+    if (file?.status !== 'passed' || passed === 0) return `${fixture} did not run and pass`;
+  }
   if (run.status !== 0) return 'unit tests failed; run pnpm test for details';
 });
 
