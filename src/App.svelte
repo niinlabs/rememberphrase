@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { copy } from './copy';
+  import logo from './assets/logo-on-dark.webp';
   import { languages } from './wordlists';
   import { loadWordlist, WordlistError } from './core/wordlist';
   import { checkReachability, type ProbeResult } from './core/reachability';
@@ -82,6 +83,13 @@
     probe = await checkReachability(skipper.signal);
     if (probe === 'site-answered' || probe === 'network-answered') alertOpen = true;
     else if (canRunLocalCheck(readiness)) localCheck();
+    await advanceWhenReady();
+  }
+
+  // Once preparation settles in an allowed state, move on to Generate. Nothing is drawn: the user
+  // still asks for words there. Coming back to Prepare later does not bounce forward again.
+  async function advanceWhenReady() {
+    if (step === 'prepare' && status.canGenerate) await goTo('generate');
   }
 
   // A silent draw shows this tab can make words from the loaded list; the words are discarded unseen.
@@ -99,6 +107,7 @@
 
   function retryLocalCheck() {
     if (canRunLocalCheck(readiness)) localCheck();
+    advanceWhenReady();
   }
 
   // A real draw that throws means the random source cannot be trusted right now: hold every
@@ -145,7 +154,7 @@
 <div class="canvas">
   <header class="masthead">
     <div class="brand">
-      <p class="wordmark">Remember<span>phrase</span></p>
+      <p class="wordmark"><img src={logo} alt="Rememberphrase" width="640" height="96" /></p>
       <p class="tagline">{copy.tagline}</p>
     </div>
     <p class="chip {status.colour}" data-testid="status-chip">
@@ -253,16 +262,12 @@
         {/each}
       </ol>
 
+      <!-- Only reached by going back from Generate; the first time, preparation moves on by itself. -->
       {#if stage === 'ready'}
-        <section class="ready" aria-labelledby="ready-title">
-          <h2 id="ready-title">{copy.ready.title}</h2>
-          <StatusBand {status} />
-          <p>{copy.ready.body}</p>
-          <button class="button primary" onclick={() => goTo('generate')}>
-            {copy.ready.continue}
-            <Icon name="forward" />
-          </button>
-        </section>
+        <button class="button primary continue" onclick={() => goTo('generate')}>
+          {copy.ready.continue}
+          <Icon name="forward" />
+        </button>
       {/if}
       {/if}
     </section>
@@ -326,13 +331,11 @@
   }
   .wordmark {
     margin: 0;
-    font-size: clamp(1.75rem, 3vw, 2.4rem);
-    font-weight: 850;
-    letter-spacing: -0.03em;
-    line-height: 1;
   }
-  .wordmark span {
-    color: var(--yellow);
+  .wordmark img {
+    display: block;
+    width: auto;
+    height: clamp(2rem, 3.4vw, 2.75rem);
   }
   .tagline {
     margin: 0.35rem 0 0;
@@ -403,7 +406,7 @@
   .stepper li.current .dot {
     background: var(--yellow);
     color: var(--navy-950);
-    box-shadow: 0 0 0 4px rgb(255 194 26 / 0.28);
+    box-shadow: 0 0 0 4px rgb(254 212 0 / 0.28);
   }
   .step-text {
     display: grid;
@@ -571,26 +574,8 @@
     background: var(--paper);
     font-weight: 650;
   }
-  .ready {
-    display: grid;
-    gap: 0.75rem;
+  .continue {
     margin-top: 1rem;
-    padding: 1.25rem;
-    border-radius: 20px;
-    background: var(--cream);
-  }
-  .ready .button {
-    justify-self: start;
-  }
-  .ready h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    letter-spacing: -0.01em;
-  }
-  .ready p {
-    margin: 0;
-    line-height: 1.5;
-    color: var(--ink-soft);
   }
   .panel {
     align-self: start;

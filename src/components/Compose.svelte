@@ -187,6 +187,29 @@
 
 <h1 id="page-title" tabindex="-1">{copy.compose.heading}</h1>
 <p class="intro">{copy.compose.intro}</p>
+<section class="preview" aria-labelledby="preview-title">
+  <h2 id="preview-title">{copy.compose.previewLabel}</h2>
+  <p class="phrase" data-testid="phrase-preview">{text}</p>
+  <p class="counts">{copy.compose.counts(intact, phrase.slots.length, connectorCount, [...text].length)}</p>
+  <p class="guidance">{guidance}</p>
+  {#if intact < phrase.slots.length}<p class="note">{copy.compose.editedNote}</p>{/if}
+  {#if /[^\x20-\x7e]/.test(text)}<p class="note warn">{copy.compose.keyboardNote}</p>{/if}
+</section>
+<fieldset class="separators">
+  <legend>{copy.compose.separatorLegend}</legend>
+  {#each separators as key (key)}
+    <label>
+      <input
+        type="radio"
+        name="separator"
+        value={key}
+        checked={phrase.separator === key}
+        onchange={() => (phrase = setSeparator(phrase, key))}
+      />
+      {copy.compose.separators[key]}
+    </label>
+  {/each}
+</fieldset>
 <p class="help" id="move-help">{copy.compose.moveHelp}</p>
 
 {#if placing}
@@ -276,15 +299,6 @@
 </ol>
 <p class="visually-hidden" aria-live="polite">{announcement}</p>
 
-<section class="preview" aria-labelledby="preview-title">
-  <h2 id="preview-title">{copy.compose.previewLabel}</h2>
-  <p class="phrase" data-testid="phrase-preview">{text}</p>
-  <p class="counts">{copy.compose.counts(intact, phrase.slots.length, connectorCount, [...text].length)}</p>
-  <p class="guidance">{guidance}</p>
-  {#if intact < phrase.slots.length}<p class="note">{copy.compose.editedNote}</p>{/if}
-  {#if /[^\x20-\x7e]/.test(text)}<p class="note warn">{copy.compose.keyboardNote}</p>{/if}
-</section>
-
 <section class="tray" aria-labelledby="tray-title">
   <h2 id="tray-title">{copy.compose.connectorsTitle}</h2>
   <ul>
@@ -308,23 +322,6 @@
   </ul>
   <p id="tray-help">{copy.compose.connectorsHelp}</p>
 </section>
-
-<fieldset class="separators">
-  <legend>{copy.compose.separatorLegend}</legend>
-  {#each separators as key (key)}
-    <label>
-      <input
-        type="radio"
-        name="separator"
-        value={key}
-        checked={phrase.separator === key}
-        onchange={() => (phrase = setSeparator(phrase, key))}
-      />
-      {copy.compose.separators[key]}
-    </label>
-  {/each}
-</fieldset>
-
 
 <div class="footer">
   <button class="button secondary" onclick={onback}>
@@ -521,7 +518,7 @@
     min-height: 3rem;
     border: 2px dashed var(--navy-700);
     border-radius: 14px;
-    background: rgb(255 194 26 / 0.18);
+    background: rgb(254 212 0 / 0.18);
     font-size: 0.85rem;
     font-weight: 750;
     cursor: pointer;
@@ -568,7 +565,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem 1rem;
-    margin: 1rem 0 0;
+    margin: 0.7rem 0 0.9rem;
     padding: 0;
     border: none;
   }
@@ -590,7 +587,7 @@
   }
 
   .preview {
-    margin-top: 0.9rem;
+    margin-top: 0.8rem;
     padding: 1rem 1.1rem;
     border-radius: 18px;
     background: var(--navy-900);

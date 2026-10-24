@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
-import { CONNECTORS } from '../../src/core/phrase';
 
 // WP02 slice 2 browser fixtures: the Generate step.
 const LIST = new Set(readFileSync('public/wordlists/eff-large-en.txt', 'utf8').split('\n').filter(Boolean));
@@ -19,7 +18,6 @@ async function reachGenerate(page: Page, context: BrowserContext) {
   await context.setOffline(true);
   await page.getByLabel(copy.offline.confirmLabel).check();
   await page.getByRole('button', { name: copy.offline.confirm }).click();
-  await page.getByRole('button', { name: copy.ready.continue }).click();
   await expect(page.getByRole('heading', { level: 1, name: copy.generate.heading })).toBeFocused();
 }
 
@@ -105,13 +103,31 @@ test('lowering the count never removes a locked word', async ({ page, context })
   await expect(tiles(page)).toHaveCount(6);
 });
 
-test('connecting words appear after generating and are labelled as not counted', async ({ page, context }) => {
+test('before the first draw there are no tiles or connecting words; afterwards the status collapses but keeps its reason', async ({ page, context }) => {
   await reachGenerate(page, context);
-  await expect(page.getByRole('heading', { name: copy.generate.connectorsTitle })).toHaveCount(0);
+  const band = page.getByTestId('status-band');
+  await expect(page.locator('.tiles, .tile')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: copy.compose.connectorsTitle })).toHaveCount(0);
+  await expect(band).toContainText(copy.band.green);
+  await expect(band.getByText(copy.band.details)).toHaveCount(0); // full explanation before words exist
+
   await generateWords(page);
-  const tray = page.getByRole('region', { name: copy.generate.connectorsTitle });
-  await expect(tray.getByRole('listitem')).toHaveText([...CONNECTORS]);
-  await expect(tray).toContainText(copy.generate.connectorsNote);
+  await expect(page.getByRole('region', { name: copy.compose.connectorsTitle })).toHaveCount(0);
+  await expect(band).toContainText(copy.chip.green); // short reason stays visible
+  await expect(band.getByText(copy.band.greenNote)).toBeHidden();
+  await band.getByText(copy.band.details).click();
+  await expect(band.getByText(copy.band.greenNote)).toBeVisible();
+});
+
+test('an allowed amber reason stays visible after drawing', async ({ page }) => {
+  await page.route('**/reachability.txt?*', (route) => route.abort('internetdisconnected')); // browser still online
+  await page.goto('/');
+  await page.getByRole('button', { name: copy.list.action }).click();
+  await page.getByLabel(copy.offline.confirmLabel).check();
+  await page.getByRole('button', { name: copy.offline.confirm }).click();
+  await expect(page.getByRole('heading', { level: 1, name: copy.generate.heading })).toBeFocused();
+  await generateWords(page);
+  await expect(page.getByTestId('status-band')).toContainText(`${copy.band.labels.caution}. ${copy.chip['browser-online']}`);
 });
 
 test('duplicate words are allowed and pointed out', async ({ page, context }) => {
@@ -135,8 +151,8 @@ test('reconnecting on Generate holds drawing; Acknowledge returns to Go offline 
   await context.setOffline(true);
   await page.getByLabel(copy.offline.confirmLabel).check();
   await page.getByRole('button', { name: copy.offline.confirm }).click();
-  await page.getByRole('button', { name: copy.ready.continue }).click();
-  expect(await shown(page)).toEqual(words);
+  await expect(page.getByRole('heading', { level: 1, name: copy.generate.heading })).toBeFocused();
+  expect(await shown(page)).toEqual(words); // the fresh check returned to Generate without a new draw
 });
 
 test('a failed draw holds drawing with a reason and a retry, and never changes the words shown', async ({ page, context }) => {
@@ -188,6 +204,7 @@ test('Back keeps the words for when you return', async ({ page, context }) => {
   const words = await generateWords(page);
   await page.getByRole('button', { name: copy.generate.back }).click();
   await expect(page.getByRole('heading', { level: 1, name: copy.heading })).toBeFocused();
+  await expect(page.getByTestId('status-band')).toHaveCount(0); // no duplicate ready card on Prepare
   await page.getByRole('button', { name: copy.ready.continue }).click();
   expect(await shown(page)).toEqual(words);
 });

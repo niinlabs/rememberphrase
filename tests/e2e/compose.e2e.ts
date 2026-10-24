@@ -15,7 +15,6 @@ async function reachCompose(page: Page, context: BrowserContext) {
   await context.setOffline(true);
   await page.getByLabel(copy.offline.confirmLabel).check();
   await page.getByRole('button', { name: copy.offline.confirm }).click();
-  await page.getByRole('button', { name: copy.ready.continue }).click();
   await page.getByRole('button', { name: copy.generate.generate }).click();
   const words = (await page.locator('.tiles .word').allInnerTexts()).map((w) => w.trim());
   await page.getByRole('button', { name: copy.generate.continue }).click();
@@ -50,6 +49,16 @@ test('the preview starts as the generated words, in order, separated by spaces',
   await expect(tiles(page)).toHaveCount(6);
   await expect(page.getByText(copy.compose.counts(6, 6, 0, words.join(' ').length))).toBeVisible();
   await expect(page.getByRole('button', { name: copy.compose.reset })).toBeDisabled();
+});
+
+test('the exact phrase and the separator choice come before the editable words', async ({ page, context }) => {
+  await reachCompose(page, context);
+  const tops = await page.evaluate(() =>
+    ['[data-testid="phrase-preview"]', 'fieldset.separators', 'ol.tokens', 'section.tray'].map(
+      (s) => document.querySelector(s)!.getBoundingClientRect().top,
+    ),
+  );
+  expect(tops).toEqual([...tops].sort((a, b) => a - b));
 });
 
 test('editing a word updates the preview and its origin; invalid edits are refused with a reason', async ({ page, context }) => {

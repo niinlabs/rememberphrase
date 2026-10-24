@@ -3,7 +3,6 @@
   import type { Status } from '../core/status';
   import {
     canReroll,
-    CONNECTORS,
     hasEdits,
     DEFAULT_WORDS,
     drawFrom,
@@ -95,7 +94,7 @@
 <h1 id="page-title" tabindex="-1">{copy.generate.heading}</h1>
 <p class="intro">{copy.generate.intro}</p>
 
-<StatusBand {status} />
+<StatusBand {status} compact={phrase !== null} />
 {#if status.colour === 'amber' && !status.canGenerate && status.reason === 'local-check-failed'}
   <button class="button primary retry" onclick={onretry}>{copy.offline.retryCheck}</button>
 {/if}
@@ -140,11 +139,6 @@
       </li>
     {/each}
   </ol>
-{:else}
-  <p class="placeholder-note">{copy.generate.placeholder}</p>
-  <div class="tiles" aria-hidden="true">
-    {#each { length: count }, i (i)}<div class="tile placeholder"></div>{/each}
-  </div>
 {/if}
 
 <div class="actions">
@@ -157,16 +151,6 @@
   {/if}
 </div>
 {#if phrase && !canReroll(phrase)}<p class="message">{copy.generate.allLocked}</p>{/if}
-
-{#if phrase}
-  <section class="connectors" aria-labelledby="connectors-title">
-    <h2 id="connectors-title">{copy.generate.connectorsTitle}</h2>
-    <ul>
-      {#each CONNECTORS as c (c)}<li>{c}</li>{/each}
-    </ul>
-    <p>{copy.generate.connectorsNote}</p>
-  </section>
-{/if}
 
 <div class="footer">
   <button class="button secondary" onclick={onback}>
@@ -263,11 +247,6 @@
     color: var(--navy-900);
   }
 
-  .placeholder-note {
-    margin: 1rem 0 0.5rem;
-    color: var(--ink-soft);
-    font-size: 0.95rem;
-  }
   .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
@@ -275,9 +254,6 @@
     margin: 1rem 0 0;
     padding: 0;
     list-style: none;
-  }
-  .placeholder-note + .tiles {
-    margin-top: 0;
   }
   .tile {
     display: flex;
@@ -288,10 +264,6 @@
     border: 1px solid var(--cream-line);
     border-radius: 14px;
     background: var(--cream);
-  }
-  .tile.placeholder {
-    border-style: dashed;
-    background: var(--paper);
   }
   .tile.locked {
     border: 2px solid var(--navy-900);
@@ -343,42 +315,6 @@
     flex-wrap: wrap;
     gap: 0.75rem;
     margin-top: 1.1rem;
-  }
-
-  .connectors {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem 0.75rem;
-    margin-top: 1.1rem;
-    padding: 0.8rem 1rem;
-    border: 1px dashed var(--cream-line);
-    border-radius: var(--radius);
-  }
-  .connectors h2 {
-    margin: 0;
-    font-size: 1rem;
-  }
-  .connectors ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .connectors li {
-    padding: 0.15rem 0.6rem;
-    border-radius: 999px;
-    background: #eef1f7;
-    color: var(--ink-soft);
-    font-weight: 650;
-  }
-  .connectors p {
-    flex-basis: 100%;
-    margin: 0;
-    font-size: 0.9rem;
-    color: var(--ink-soft);
   }
 
   .footer {

@@ -58,8 +58,6 @@ export const copy = {
   },
 
   ready: {
-    title: 'Ready for the next step',
-    body: 'This tab has the word list and has shown it can make random words without using the network.',
     continue: 'Continue to Generate',
   },
 
@@ -75,7 +73,6 @@ export const copy = {
       recommended: 'The length we recommend for a master password or computer login.',
     },
     wordsLabel: 'Your random words',
-    placeholder: 'Your words will appear here',
     generate: 'Generate random words',
     newWords: 'Generate new words',
     reroll: (n: number) => `Reroll unlocked words (${n})`,
@@ -85,8 +82,6 @@ export const copy = {
     lockedTag: 'Locked',
     unlocksNeeded: (n: number, count: number) => `Unlock ${n} ${n === 1 ? 'word' : 'words'} to go down to ${count} words.`,
     duplicate: 'This word appears twice. You can reroll it if you like.',
-    connectorsTitle: 'Suggested connecting words',
-    connectorsNote: 'You can add these in the next step. They are not random words and are not counted.',
     back: 'Back to Prepare',
     continue: 'Make it yours',
   },
@@ -148,6 +143,7 @@ export const copy = {
 
   band: {
     labels: { red: 'Hold', notReady: 'Not ready', caution: 'Caution', green: 'Ready' },
+    details: 'Details',
     'site-answered': 'Rememberphrase answered, so you are still connected. Generation is held; check Airplane mode and confirm again.',
     'network-answered':
       'A network answered (this can be a Wi-Fi login page). You may still be connected. Generation is held; check Airplane mode and confirm again.',

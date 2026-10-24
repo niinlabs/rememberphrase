@@ -21,7 +21,8 @@ test.beforeEach(async ({ page }) => {
 
 const band = (page: Page) => page.getByTestId('status-band');
 const chip = (page: Page) => page.getByTestId('status-chip');
-const ready = (page: Page) => page.getByRole('region', { name: copy.ready.title });
+// Preparation that settles in an allowed state moves straight on to Generate.
+const ready = (page: Page) => page.getByRole('heading', { level: 1, name: copy.generate.heading });
 const alert = (page: Page) => page.getByRole('alertdialog', { name: copy.interruption.title });
 const confirmBox = (page: Page) => page.getByLabel(copy.offline.confirmLabel);
 const confirmButton = (page: Page) => page.getByRole('button', { name: copy.offline.confirm });
@@ -78,6 +79,15 @@ test('build has exactly one JS and one CSS file', () => {
   expect(files.filter((f) => f.endsWith('.css'))).toHaveLength(1);
 });
 
+test('the header shows the logo, loaded from this site, with its name as alt text', async ({ page }) => {
+  await page.goto('/');
+  const logo = page.getByRole('banner').getByRole('img', { name: 'Rememberphrase' });
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(640);
+  expect(new URL(await logo.evaluate((img: HTMLImageElement) => img.currentSrc)).origin).toBe(new URL(page.url()).origin);
+  await expectNoCspViolations(page);
+});
+
 test('stage 01 holds the language selector and a text-only Fetch words button', async ({ page }) => {
   await page.goto('/');
   const stage = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: copy.stages.fetch }) });
@@ -97,8 +107,8 @@ test('offline journey: no answer, silent local check, green, nothing shown, sent
   page.on('request', (r) => requests.push(new URL(r.url()).pathname));
 
   await confirmOffline(page);
-  await expect(page.getByText(copy.offline.noAnswer)).toBeVisible();
-  await expect(ready(page)).toBeVisible();
+  await expect(ready(page)).toBeFocused(); // moved on to Generate, focus on its heading
+  await expect(page.locator('.tiles')).toHaveCount(0); // navigation alone draws nothing
   await expect(band(page)).toContainText(copy.band.green);
   await expect(chip(page)).toHaveText(copy.chip.green);
   expect(requests.filter((p) => p !== '/reachability.txt')).toEqual([]); // the local check makes no requests
@@ -187,7 +197,8 @@ test('Escape counts as Skip', async ({ page }) => {
   await confirmOffline(page);
   await expect(page.getByRole('dialog', { name: copy.dialog.title })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByText(copy.offline.skipped, { exact: true })).toBeVisible();
+  await expect(ready(page)).toBeFocused();
+  await expect(band(page)).toContainText(copy.band.skipped);
 });
 
 test('a browser that still reports online after a failed check is amber but may continue', async ({ page }) => {
