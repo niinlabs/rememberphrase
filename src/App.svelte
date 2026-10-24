@@ -8,6 +8,9 @@
   import { canRunLocalCheck, connectionStatus, type Readiness } from './core/status';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import ConnectionAlert from './components/ConnectionAlert.svelte';
+  import Generate from './components/Generate.svelte';
+  import Compose from './components/Compose.svelte';
+  import type { Phrase } from './core/phrase';
   import Icon from './components/Icon.svelte';
   import StatusBand from './components/StatusBand.svelte';
 
@@ -23,6 +26,9 @@
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
   let alertOpen = $state(false);
+  let step = $state<'prepare' | 'generate' | 'compose'>('prepare');
+  // The phrase lives here so moving between steps never loses it (volatile tab state only).
+  let phrase = $state<Phrase | null>(null);
   let confirmBox = $state<HTMLInputElement>();
 
   const language = $derived(languages.find((l) => l.code === languageCode)!);
@@ -49,6 +55,8 @@
           ? copy.chip[status.reason]
           : copy.chip.notReady,
   );
+  const stepIndex = $derived({ prepare: 0, generate: 1, compose: 2 }[step]);
+  const panel = $derived(step === 'prepare' ? copy.panel[stage] : copy.panel[step]);
   const alertText = $derived(status.colour === 'red' ? copy.band[status.reason] : '');
   const count = (n: number) => new Intl.NumberFormat('en').format(n);
 
@@ -103,12 +111,20 @@
     alertOpen = true;
   }
 
-  // The explanation closes; the red hold stays until the user confirms again and a new check runs.
+  // The explanation closes; the red hold stays until the user confirms again and a new check runs,
+  // so acknowledging always returns to Go offline, even from a later step.
   async function acknowledge() {
     alertOpen = false;
     osConfirmed = false;
+    step = 'prepare';
     await tick();
     confirmBox?.focus();
+  }
+
+  async function goTo(next: typeof step) {
+    step = next;
+    await tick();
+    document.getElementById('page-title')?.focus();
   }
 
   // Nothing is stored, so leaving the page loses the prepared tab; ask first once the list is loaded.
@@ -134,8 +150,8 @@
   <nav class="stepper" aria-label="Progress">
     <ol>
       {#each copy.steps as step, i (step.name)}
-        <li class:current={i === 0} aria-current={i === 0 ? 'step' : undefined}>
-          <span class="dot">{i + 1}</span>
+        <li class:current={i === stepIndex} class:done={i < stepIndex} aria-current={i === stepIndex ? 'step' : undefined}>
+          <span class="dot">{#if i < stepIndex}<Icon name="check" size={20} />{:else}{i + 1}{/if}</span>
           <span class="step-text"><strong>{step.name}</strong><span>{step.hint}</span></span>
         </li>
       {/each}
@@ -144,7 +160,12 @@
 
   <main class="card">
     <section class="work" aria-labelledby="page-title">
-      <h1 id="page-title">{copy.heading}</h1>
+      {#if step === 'generate' && words}
+        <Generate {words} {status} bind:phrase onback={() => goTo('prepare')} oncontinue={() => goTo('compose')} />
+      {:else if step === 'compose' && words && phrase}
+        <Compose {words} {status} bind:phrase onback={() => goTo('generate')} />
+      {:else}
+      <h1 id="page-title" tabindex="-1">{copy.heading}</h1>
       <p class="intro">{copy.intro}</p>
 
       <ol class="stages">
@@ -213,13 +234,18 @@
           <h2 id="ready-title">{copy.ready.title}</h2>
           <StatusBand {status} />
           <p>{copy.ready.body}</p>
+          <button class="button primary" onclick={() => goTo('generate')}>
+            {copy.ready.continue}
+            <Icon name="forward" />
+          </button>
         </section>
+      {/if}
       {/if}
     </section>
 
     <aside class="panel" aria-labelledby="panel-title">
-      <h2 id="panel-title">{copy.panel[stage].title}</h2>
-      {#each copy.panel[stage].body as line (line)}<p>{line}</p>{/each}
+      <h2 id="panel-title">{panel.title}</h2>
+      {#each panel.body as line (line)}<p>{line}</p>{/each}
       <hr />
       <p class="small">{copy.panel.noStorage}</p>
       <p class="small">{copy.panel.attribution}</p>
@@ -343,6 +369,13 @@
   .stepper li.current {
     color: #fff;
   }
+  .stepper li.done {
+    color: #fff;
+  }
+  .stepper li.done .dot {
+    background: var(--yellow);
+    color: var(--navy-950);
+  }
   .stepper li.current .dot {
     background: var(--yellow);
     color: var(--navy-950);
@@ -366,6 +399,9 @@
     border-radius: var(--radius-card);
     background: var(--paper);
     box-shadow: var(--shadow-card);
+  }
+  h1:focus {
+    outline: none;
   }
   h1 {
     margin: 0;
@@ -518,6 +554,9 @@
     padding: 1.25rem;
     border-radius: 20px;
     background: var(--cream);
+  }
+  .ready .button {
+    justify-self: start;
   }
   .ready h2 {
     margin: 0;
