@@ -1,0 +1,112 @@
+:root {
+  --navy-950: #08122a;
+  --navy-900: #0e1b3a;
+  --navy-700: #24365f;
+  --ink: #0e1a33;
+  --ink-soft: #33466e;
+  --yellow: #ffc21a;
+  --yellow-deep: #f2ae00;
+  --cream: #fff6da;
+  --cream-line: #eed48a;
+  --paper: #fffdf7;
+  --line: #ebe3cc;
+  --muted: #8a93a8;
+  --focus: #1d4ed8;
+  --red: #b42318;
+  --red-bg: #fdecea;
+  --amber: #8a4b00;
+  --amber-bg: #fff1d6;
+  --green: #1e6f37;
+  --green-bg: #e8f5ec;
+  --radius: 14px;
+  --radius-card: 26px;
+  --shadow-card: 0 28px 60px -30px rgb(3 8 24 / 0.75), 0 2px 6px rgb(3 8 24 / 0.18);
+  --shadow-button: 0 8px 18px -10px rgb(122 82 0 / 0.75);
+
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--ink);
+  background: var(--navy-950);
+  scrollbar-color: var(--navy-700) var(--navy-950);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--yellow);
+  color: var(--navy-950);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 3.25rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 160ms;
+}
+
+.button.primary {
+  border: none;
+  background: var(--yellow);
+  color: var(--navy-950);
+  box-shadow: var(--shadow-button);
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--yellow-deep);
+  transform: translateY(-1px);
+}
+
+.button.secondary {
+  border: 2px solid var(--cream-line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button.secondary:hover:not(:disabled) {
+  border-color: var(--yellow-deep);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  background: #eceef3;
+  color: #5d6782;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

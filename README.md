@@ -41,6 +41,7 @@ pnpm test                      # unit tests
 pnpm check                     # type checking
 pnpm test:e2e                  # builds the site and runs browser tests
 ./scripts/verify-wp00.mjs      # checks the WP00 decisions and word-list evidence
+./scripts/verify-wp01.mjs      # checks the Prepare step; needs a recorded real-device run
 ```
 
 Approved project decisions are recorded in [docs/decisions](docs/decisions).

@@ -9,3 +9,6 @@ export const effLargeList = {
   sourceSha256: 'addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e',
   licence: 'CC BY 4.0',
 } satisfies Wordlist & Record<string, unknown>;
+
+// Languages offered in the interface; each needs a reviewed, attributed list (WP00 D2, D3).
+export const languages = [{ code: 'en', name: 'English', list: effLargeList }];
