@@ -42,6 +42,7 @@ export const copy = {
     confirm: 'Confirm offline',
     noAnswer: 'Could not reach Rememberphrase. This does not prove your computer is offline.',
     skipped: 'You skipped the connection check.',
+    retryCheck: 'Try the check again',
   },
 
   dialog: {
@@ -68,9 +69,11 @@ export const copy = {
       'A network answered (this can be a Wi-Fi login page). You may still be connected. Generation is held; check Airplane mode and confirm again.',
     reconnected: 'Your browser reported a connection. Generation is paused; check Airplane mode and confirm again.',
     list: 'Fetch the word list while you are still online.',
-    rng: "This browser can't produce the random numbers Rememberphrase needs. Open Rememberphrase over https:// in an up-to-date browser.",
+    rng: "This browser can't produce the random numbers Rememberphrase needs, so preparation can't continue here. Open Rememberphrase over https:// in an up-to-date browser.",
     unconfirmed: 'Offline status not confirmed. Go offline, then confirm.',
     'local-check': 'Checking that this tab can make words…',
+    'local-check-failed':
+      "This tab couldn't make test words, so preparation is held. Try the check again. If it keeps failing, reload the page while online.",
     skipped: 'You skipped the connection check. You confirmed offline, and the word list is ready in this tab.',
     'browser-online': 'Your browser still reports a network connection. This can be a VPN or virtual adapter; check Airplane mode.',
     green: 'You confirmed offline, and the word list is ready in this tab.',
@@ -90,7 +93,7 @@ export const copy = {
       title: 'About the word list',
       body: [
         'Your words come from the EFF Long Wordlist: 7,776 common English words, chosen to be easy to type and remember.',
-        'The list is loaded into this tab now, while you are online, so nothing needs to be downloaded later.',
+        'Fetch words loads the list into this tab while you are online, so nothing needs to be downloaded once you go offline.',
       ],
     },
     offline: {

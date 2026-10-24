@@ -19,7 +19,7 @@
   let probe = $state<ProbeResult | 'pending' | null>(null);
   let skipper: AbortController | null = null;
   let localCheckOk = $state(false);
-  let rngWorks = $state(true);
+  let localCheckFailed = $state(false);
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
   let alertOpen = $state(false);
@@ -28,10 +28,11 @@
   const language = $derived(languages.find((l) => l.code === languageCode)!);
   const readiness: Readiness = $derived({
     listReady: words !== null,
-    rngAvailable: rngWorks && typeof globalThis.crypto?.getRandomValues === 'function',
+    rngAvailable: typeof globalThis.crypto?.getRandomValues === 'function',
     osConfirmed,
     probe: probe === 'pending' ? null : probe,
     localCheckOk,
+    localCheckFailed,
     browserOnline,
     reconnected,
   });
@@ -66,6 +67,7 @@
   async function confirmOffline() {
     reconnected = false;
     localCheckOk = false;
+    localCheckFailed = false;
     alertOpen = false;
     skipper = new AbortController();
     probe = 'pending';
@@ -75,14 +77,20 @@
   }
 
   // A silent draw shows this tab can make words from the loaded list; the words are discarded unseen.
+  // A failed draw holds preparation but stays retryable, from its own button or by confirming again.
   function localCheck() {
     try {
       sampleWords(words!, 6);
       localCheckOk = true;
+      localCheckFailed = false;
     } catch {
       localCheckOk = false;
-      rngWorks = false;
+      localCheckFailed = true;
     }
+  }
+
+  function retryLocalCheck() {
+    if (canRunLocalCheck(readiness)) localCheck();
   }
 
   function online() {
@@ -174,12 +182,20 @@
                 </ul>
                 <p class="meta">{copy.offline.check}</p>
                 <StatusBand {status} />
+                {#if status.colour === 'amber' && !status.canGenerate && status.reason === 'local-check-failed'}
+                  <button class="button primary" onclick={retryLocalCheck}>{copy.offline.retryCheck}</button>
+                {/if}
                 <div class="confirm-row">
                   <label class="confirm">
                     <input type="checkbox" bind:checked={osConfirmed} bind:this={confirmBox} />
                     <span>{copy.offline.confirmLabel}</span>
                   </label>
-                  <button class="button primary" onclick={confirmOffline} disabled={!osConfirmed || probe === 'pending'}>
+                  <!-- Without a random source nothing can become ready, so confirming would be a dead end. -->
+                  <button
+                    class="button primary"
+                    onclick={confirmOffline}
+                    disabled={!osConfirmed || probe === 'pending' || !readiness.rngAvailable}
+                  >
                     <Icon name="offline" />
                     {copy.offline.confirm}
                   </button>

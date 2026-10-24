@@ -217,27 +217,43 @@ test('a tampered word list is rejected and preparation does not continue', async
   await expect(confirmButton(page)).toHaveCount(0);
 });
 
-test('without a random source, preparation holds with HTTPS and browser guidance', async ({ page, context }) => {
+test('without a random source, preparation holds and offers no dead-end confirmation', async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(crypto, 'getRandomValues', { value: undefined }));
   await fetchWords(page);
   await expect(band(page)).toContainText(copy.band.rng);
-  await context.setOffline(true);
-  await confirmOffline(page);
+  await confirmBox(page).check();
+  await expect(confirmButton(page)).toBeDisabled();
   await expect(ready(page)).toHaveCount(0);
 });
 
-test('a failing local check holds preparation instead of reporting ready', async ({ page, context }) => {
-  await page.addInitScript(() => {
-    crypto.getRandomValues = () => {
-      throw new Error('random source failed');
-    };
+for (const recovery of ['Try the check again', 'Confirm offline'] as const) {
+  test(`a local check that fails once can be retried with ${recovery}`, async ({ page, context }) => {
+    await page.addInitScript(() => {
+      const real = crypto.getRandomValues.bind(crypto);
+      (window as unknown as { failRandom: boolean }).failRandom = true;
+      crypto.getRandomValues = ((array: Uint32Array<ArrayBuffer>) => {
+        if ((window as unknown as { failRandom: boolean }).failRandom) throw new Error('random source failed');
+        return real(array);
+      }) as typeof crypto.getRandomValues;
+    });
+    await fetchWords(page);
+    await context.setOffline(true);
+    await confirmOffline(page);
+    await expect(band(page)).toContainText(copy.band['local-check-failed']);
+    await expect(ready(page)).toHaveCount(0);
+
+    // Retrying while the source still fails stays held.
+    await page.getByRole('button', { name: copy.offline.retryCheck }).click();
+    await expect(band(page)).toContainText(copy.band['local-check-failed']);
+    await expect(ready(page)).toHaveCount(0);
+
+    await page.evaluate(() => ((window as unknown as { failRandom: boolean }).failRandom = false));
+    if (recovery === 'Try the check again') await page.getByRole('button', { name: copy.offline.retryCheck }).click();
+    else await confirmButton(page).click();
+    await expect(ready(page)).toBeVisible();
+    await expect(band(page)).toContainText(copy.band.green);
   });
-  await fetchWords(page);
-  await context.setOffline(true);
-  await confirmOffline(page);
-  await expect(band(page)).toContainText(copy.band.rng);
-  await expect(ready(page)).toHaveCount(0);
-});
+}
 
 test('leaving after the list is loaded asks first, because nothing is saved', async ({ page }) => {
   await fetchWords(page);

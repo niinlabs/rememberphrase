@@ -15,12 +15,12 @@ The browser tests emulate going offline. This record covers the real thing: a re
 
 ## Record
 
-- Date:
-- Device and operating system:
-- Browser and version:
-- Preview address:
-- Notes:
-- Result: not yet run
+- Date: 2026-10-24
+- Device and operating system: iPhone (iOS) and a Mac (macOS); versions not recorded
+- Browser and version: Safari on the iPhone, Firefox on the Mac; versions not recorded
+- Preview address: https://192.168.10.63:4443/ (`pnpm preview:lan`)
+- Notes: The revised Prepare step worked as intended on both. The screen-reader pass (step 8) is deferred.
+- Result: partial — steps 1–7 passed on both devices; step 8 deferred
 
 ## Earlier runs
 

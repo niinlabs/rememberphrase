@@ -45,6 +45,17 @@ test('random-source guidance points to HTTPS and a current browser, not to fetch
   expect(copy.band.rng).not.toMatch(/fetch/i);
 });
 
+test('before fetching, the panel describes what Fetch words will do, not what has happened', () => {
+  const text = copy.panel.fetch.body.join(' ');
+  expect(text).toContain('Fetch words loads the list');
+  expect(text).not.toMatch(/\b(is|has been|was) (now )?loaded\b/);
+});
+
+test('a failed local check names its recovery', () => {
+  expect(copy.band['local-check-failed']).toContain('Try the check again');
+  expect(copy.offline.retryCheck).toBe('Try the check again');
+});
+
 test('a failed check is never presented as proof of being offline', () => {
   expect(copy.offline.noAnswer).toContain('does not prove');
   expect(copy.dialog.note).toContain('does not prove');

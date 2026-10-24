@@ -9,6 +9,7 @@ const ready: Readiness = {
   osConfirmed: true,
   probe: 'no-answer',
   localCheckOk: true,
+  localCheckFailed: false,
   browserOnline: false,
   reconnected: false,
 };
@@ -29,6 +30,7 @@ test.each([
   ['reconnection outranks a skipped check', { probe: 'skipped', reconnected: true }, 'red', false],
   ['reconnection outranks missing confirmation', { osConfirmed: false, reconnected: true }, 'red', false],
   ['Skip does not replace the local check', { probe: 'skipped', localCheckOk: false }, 'amber', false],
+  ['a failed local check holds', { localCheckOk: false, localCheckFailed: true }, 'amber', false],
 ] as const)('%s', (_name, change, colour, canGenerate) => {
   const status = connectionStatus({ ...ready, ...(change as Partial<Readiness>) });
   expect(status.colour).toBe(colour);
@@ -43,9 +45,10 @@ test('green only when every condition holds (no false green in any combination)'
       for (const osConfirmed of flags)
         for (const probe of probes)
           for (const localCheckOk of flags)
+            for (const localCheckFailed of flags)
             for (const browserOnline of flags)
               for (const reconnected of flags) {
-                const r = { listReady, rngAvailable, osConfirmed, probe, localCheckOk, browserOnline, reconnected };
+                const r = { listReady, rngAvailable, osConfirmed, probe, localCheckOk, localCheckFailed, browserOnline, reconnected };
                 const status = connectionStatus(r);
                 const allClear =
                   listReady && rngAvailable && osConfirmed && probe === 'no-answer' && localCheckOk && !browserOnline && !reconnected;
@@ -54,11 +57,21 @@ test('green only when every condition holds (no false green in any combination)'
               }
 });
 
+test('a failed local check is named, so the page can offer a retry', () => {
+  expect(connectionStatus({ ...ready, localCheckOk: false, localCheckFailed: true })).toEqual({
+    colour: 'amber',
+    canGenerate: false,
+    reason: 'local-check-failed',
+  });
+  expect(connectionStatus({ ...ready, localCheckOk: false })).toMatchObject({ reason: 'local-check' });
+});
+
 test('the silent local check runs only on an allowed path', () => {
   const pending = { ...ready, localCheckOk: false };
   expect(canRunLocalCheck(pending)).toBe(true);
   expect(canRunLocalCheck({ ...pending, probe: 'skipped' })).toBe(true);
   expect(canRunLocalCheck({ ...pending, browserOnline: true })).toBe(true);
+  expect(canRunLocalCheck({ ...pending, localCheckFailed: true })).toBe(true); // a failed check may be retried
   for (const blocked of [
     { probe: 'network-answered' },
     { probe: 'site-answered' },

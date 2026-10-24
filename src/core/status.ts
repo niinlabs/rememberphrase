@@ -6,13 +6,14 @@ export type Readiness = {
   osConfirmed: boolean;
   probe: ProbeResult | null; // null until the check has finished
   localCheckOk: boolean; // a silent draw from the loaded list succeeded in this tab (WP00 D7 as amended)
+  localCheckFailed: boolean; // the last silent draw threw; it can be retried
   browserOnline: boolean; // navigator.onLine: a hint only
   reconnected: boolean; // the browser reported coming online after the user confirmed offline
 };
 
 export type Status =
   | { colour: 'red'; canGenerate: false; reason: 'site-answered' | 'network-answered' | 'reconnected' }
-  | { colour: 'amber'; canGenerate: false; reason: 'list' | 'rng' | 'unconfirmed' | 'local-check' }
+  | { colour: 'amber'; canGenerate: false; reason: 'list' | 'rng' | 'unconfirmed' | 'local-check' | 'local-check-failed' }
   | { colour: 'amber'; canGenerate: true; reason: 'skipped' | 'browser-online' }
   | { colour: 'green'; canGenerate: true };
 
@@ -25,7 +26,9 @@ export function connectionStatus(r: Readiness): Status {
   }
   if (r.reconnected) return { colour: 'red', canGenerate: false, reason: 'reconnected' };
   if (!r.osConfirmed || r.probe === null) return { colour: 'amber', canGenerate: false, reason: 'unconfirmed' };
-  if (!r.localCheckOk) return { colour: 'amber', canGenerate: false, reason: 'local-check' };
+  if (!r.localCheckOk) {
+    return { colour: 'amber', canGenerate: false, reason: r.localCheckFailed ? 'local-check-failed' : 'local-check' };
+  }
   if (r.probe === 'skipped') return { colour: 'amber', canGenerate: true, reason: 'skipped' };
   if (r.browserOnline) return { colour: 'amber', canGenerate: true, reason: 'browser-online' };
   return { colour: 'green', canGenerate: true };
