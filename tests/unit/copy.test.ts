@@ -7,7 +7,7 @@ const strings = (value: unknown): string[] =>
   typeof value === 'string'
     ? [value]
     : typeof value === 'function'
-      ? strings(value('7,776'))
+      ? strings(value('English', '7,776'))
       : value && typeof value === 'object'
         ? Object.values(value).flatMap(strings)
         : [];
@@ -26,8 +26,23 @@ test('the fixture catches overclaims', () => {
     expect(overclaim.test(bad), bad).toBe(true);
 });
 
-test('green copy says the site cannot verify Airplane mode', () => {
-  expect(copy.band.green).toContain('The site cannot verify Airplane mode.');
+test('green comes with an informational note that the site cannot see Airplane mode', () => {
+  expect(copy.band.greenNote).toMatch(/^Good to know: websites can't see your device's Airplane mode setting/);
+  expect(copy.band.greenNote).toContain('relies on your own check');
+});
+
+test('the no-storage claim covers only what the site controls', () => {
+  expect(copy.panel.noStorage).toContain('This site stores nothing in your browser');
+  expect(copy.panel.noStorage).toContain('may still keep its own records');
+});
+
+test('the red interruption asks for a fresh check rather than dismissing the hold', () => {
+  expect(copy.interruption.next).toContain('run a new check');
+});
+
+test('random-source guidance points to HTTPS and a current browser, not to fetching again', () => {
+  expect(copy.band.rng).toContain('https://');
+  expect(copy.band.rng).not.toMatch(/fetch/i);
 });
 
 test('a failed check is never presented as proof of being offline', () => {

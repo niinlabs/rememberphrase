@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { ProbeResult } from '../../src/core/reachability';
-import { canRunSample, connectionStatus, type Readiness } from '../../src/core/status';
+import { canRunLocalCheck, connectionStatus, type Readiness } from '../../src/core/status';
 
 // Decision-table fixtures for WP00 D7.
 const ready: Readiness = {
@@ -8,7 +8,7 @@ const ready: Readiness = {
   rngAvailable: true,
   osConfirmed: true,
   probe: 'no-answer',
-  sampleOk: true,
+  localCheckOk: true,
   browserOnline: false,
   reconnected: false,
 };
@@ -22,13 +22,13 @@ test.each([
   ['browser reconnected after confirmation', { reconnected: true }, 'red', false],
   ['offline not confirmed', { osConfirmed: false }, 'amber', false],
   ['check not finished', { probe: null }, 'amber', false],
-  ['no successful disposable sample yet', { sampleOk: false }, 'amber', false],
+  ['no successful local check yet', { localCheckOk: false }, 'amber', false],
   ['check skipped', { probe: 'skipped' }, 'amber', true],
   ['browser still reports online', { browserOnline: true }, 'amber', true],
   ['a missing list outranks an answer', { listReady: false, probe: 'network-answered' }, 'amber', false],
   ['reconnection outranks a skipped check', { probe: 'skipped', reconnected: true }, 'red', false],
   ['reconnection outranks missing confirmation', { osConfirmed: false, reconnected: true }, 'red', false],
-  ['Skip does not replace the sample', { probe: 'skipped', sampleOk: false }, 'amber', false],
+  ['Skip does not replace the local check', { probe: 'skipped', localCheckOk: false }, 'amber', false],
 ] as const)('%s', (_name, change, colour, canGenerate) => {
   const status = connectionStatus({ ...ready, ...(change as Partial<Readiness>) });
   expect(status.colour).toBe(colour);
@@ -42,21 +42,31 @@ test('green only when every condition holds (no false green in any combination)'
     for (const rngAvailable of flags)
       for (const osConfirmed of flags)
         for (const probe of probes)
-          for (const sampleOk of flags)
+          for (const localCheckOk of flags)
             for (const browserOnline of flags)
               for (const reconnected of flags) {
-                const r = { listReady, rngAvailable, osConfirmed, probe, sampleOk, browserOnline, reconnected };
+                const r = { listReady, rngAvailable, osConfirmed, probe, localCheckOk, browserOnline, reconnected };
                 const status = connectionStatus(r);
                 const allClear =
-                  listReady && rngAvailable && osConfirmed && probe === 'no-answer' && sampleOk && !browserOnline && !reconnected;
+                  listReady && rngAvailable && osConfirmed && probe === 'no-answer' && localCheckOk && !browserOnline && !reconnected;
                 expect(status.colour === 'green', JSON.stringify(r)).toBe(allClear);
                 if (status.colour === 'red' || !listReady || !rngAvailable) expect(status.canGenerate).toBe(false);
               }
 });
 
-test('the disposable sample needs everything except a previous sample', () => {
-  expect(canRunSample({ ...ready, sampleOk: false })).toBe(true);
-  expect(canRunSample({ ...ready, sampleOk: false, probe: 'skipped' })).toBe(true);
-  expect(canRunSample({ ...ready, sampleOk: false, probe: 'network-answered' })).toBe(false);
-  expect(canRunSample({ ...ready, sampleOk: false, osConfirmed: false })).toBe(false);
+test('the silent local check runs only on an allowed path', () => {
+  const pending = { ...ready, localCheckOk: false };
+  expect(canRunLocalCheck(pending)).toBe(true);
+  expect(canRunLocalCheck({ ...pending, probe: 'skipped' })).toBe(true);
+  expect(canRunLocalCheck({ ...pending, browserOnline: true })).toBe(true);
+  for (const blocked of [
+    { probe: 'network-answered' },
+    { probe: 'site-answered' },
+    { reconnected: true },
+    { osConfirmed: false },
+    { probe: null },
+    { listReady: false },
+    { rngAvailable: false },
+  ] as Partial<Readiness>[])
+    expect(canRunLocalCheck({ ...pending, ...blocked }), JSON.stringify(blocked)).toBe(false);
 });

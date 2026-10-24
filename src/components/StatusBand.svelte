@@ -21,7 +21,11 @@
 
 <div class="band {status.colour}" role="status" data-testid="status-band">
   <span class="icon"><Icon name={icon} size={28} /></span>
-  <p><strong>{label}.</strong> {text}</p>
+  <p>
+    <strong>{label}.</strong>
+    {text}
+    {#if status.colour === 'green'}<span class="note">{copy.band.greenNote}</span>{/if}
+  </p>
 </div>
 
 <style>
@@ -57,5 +61,12 @@
   }
   strong {
     font-weight: 800;
+  }
+  /* Information, not a warning: neutral ink on its own line. */
+  .note {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
   }
 </style>

@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { copy } from './copy';
   import { languages } from './wordlists';
   import { loadWordlist, WordlistError } from './core/wordlist';
   import { checkReachability, type ProbeResult } from './core/reachability';
   import { sampleWords } from './core/random';
-  import { canRunSample, connectionStatus, type Readiness } from './core/status';
+  import { canRunLocalCheck, connectionStatus, type Readiness } from './core/status';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
+  import ConnectionAlert from './components/ConnectionAlert.svelte';
   import Icon from './components/Icon.svelte';
   import StatusBand from './components/StatusBand.svelte';
 
@@ -16,27 +18,27 @@
   let osConfirmed = $state(false);
   let probe = $state<ProbeResult | 'pending' | null>(null);
   let skipper: AbortController | null = null;
-  let sampleOk = $state(false);
+  let localCheckOk = $state(false);
+  let rngWorks = $state(true);
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
-  let samples = $state<string[][]>([]);
-  let rngError = $state(false);
+  let alertOpen = $state(false);
+  let confirmBox = $state<HTMLInputElement>();
 
   const language = $derived(languages.find((l) => l.code === languageCode)!);
   const readiness: Readiness = $derived({
     listReady: words !== null,
-    rngAvailable: typeof globalThis.crypto?.getRandomValues === 'function',
+    rngAvailable: rngWorks && typeof globalThis.crypto?.getRandomValues === 'function',
     osConfirmed,
     probe: probe === 'pending' ? null : probe,
-    sampleOk,
+    localCheckOk,
     browserOnline,
     reconnected,
   });
   const status = $derived(connectionStatus(readiness));
-  const stage = $derived(
-    words === null ? 'language' : probe === null || probe === 'pending' || status.colour === 'red' ? 'offline' : 'sample',
-  );
-  const order = ['language', 'offline', 'sample'] as const;
+  const stage = $derived(words === null ? 'fetch' : status.canGenerate ? 'ready' : 'offline');
+  const stageIndex = $derived(stage === 'fetch' ? 0 : stage === 'offline' ? 1 : 2);
+  const order = ['fetch', 'offline'] as const;
   const chip = $derived(
     status.colour === 'red'
       ? copy.chip.red
@@ -46,9 +48,10 @@
           ? copy.chip[status.reason]
           : copy.chip.notReady,
   );
+  const alertText = $derived(status.colour === 'red' ? copy.band[status.reason] : '');
   const count = (n: number) => new Intl.NumberFormat('en').format(n);
 
-  async function prepare() {
+  async function fetchWords() {
     loading = true;
     listError = null;
     try {
@@ -62,24 +65,42 @@
 
   async function confirmOffline() {
     reconnected = false;
+    localCheckOk = false;
+    alertOpen = false;
     skipper = new AbortController();
     probe = 'pending';
     probe = await checkReachability(skipper.signal);
+    if (probe === 'site-answered' || probe === 'network-answered') alertOpen = true;
+    else if (canRunLocalCheck(readiness)) localCheck();
   }
 
-  function sample() {
-    rngError = false;
+  // A silent draw shows this tab can make words from the loaded list; the words are discarded unseen.
+  function localCheck() {
     try {
-      samples.unshift(sampleWords(words!, 6));
-      sampleOk = true;
+      sampleWords(words!, 6);
+      localCheckOk = true;
     } catch {
-      rngError = true;
+      localCheckOk = false;
+      rngWorks = false;
     }
   }
 
   function online() {
     browserOnline = true;
-    if (probe !== null && probe !== 'pending') reconnected = true;
+    if (probe === null) return;
+    // Confirmation starts when the check starts, so a reconnection during the check also holds (D7 row 2).
+    reconnected = true;
+    localCheckOk = false;
+    skipper?.abort();
+    alertOpen = true;
+  }
+
+  // The explanation closes; the red hold stays until the user confirms again and a new check runs.
+  async function acknowledge() {
+    alertOpen = false;
+    osConfirmed = false;
+    await tick();
+    confirmBox?.focus();
   }
 
   // Nothing is stored, so leaving the page loses the prepared tab; ask first once the list is loaded.
@@ -96,19 +117,10 @@
       <p class="wordmark">Remember<span>phrase</span></p>
       <p class="tagline">{copy.tagline}</p>
     </div>
-    <div class="tools">
-      <label class="language">
-        <Icon name="globe" size={20} />
-        <span class="visually-hidden">{copy.languageLabel}</span>
-        <select bind:value={languageCode} disabled={words !== null}>
-          {#each languages as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
-        </select>
-      </label>
-      <p class="chip {status.colour}" data-testid="status-chip">
-        <Icon name={status.colour === 'red' ? 'hold' : status.colour === 'green' ? 'ready' : 'pending'} size={20} />
-        {chip}
-      </p>
-    </div>
+    <p class="chip {status.colour}" data-testid="status-chip">
+      <Icon name={status.colour === 'red' ? 'hold' : status.colour === 'green' ? 'ready' : 'pending'} size={20} />
+      {chip}
+    </p>
   </header>
 
   <nav class="stepper" aria-label="Progress">
@@ -127,11 +139,9 @@
       <h1 id="page-title">{copy.heading}</h1>
       <p class="intro">{copy.intro}</p>
 
-      <StatusBand {status} />
-
       <ol class="stages">
         {#each order as key, i (key)}
-          {@const pos = key === stage ? 'current' : order.indexOf(key) < order.indexOf(stage) ? 'done' : 'upcoming'}
+          {@const pos = i < stageIndex ? 'done' : i === stageIndex ? 'current' : 'upcoming'}
           <li class="stage {pos}" aria-current={pos === 'current' ? 'step' : undefined}>
             <span class="marker" aria-hidden="true">
               {#if pos === 'done'}<Icon name="check" size={18} />{:else}{i + 1}{/if}
@@ -139,57 +149,56 @@
             <div class="stage-body">
               <h2>{copy.stages[key]}</h2>
 
-              {#if key === 'language'}
+              {#if key === 'fetch'}
                 {#if words}
-                  <p class="summary">{copy.list.ready(count(words.length))}</p>
+                  <p class="summary">{copy.list.ready(language.name, count(words.length))}</p>
                 {:else if pos === 'current'}
-                  <p class="meta">{language.name} · {count(language.list.count)} words</p>
-                  <button class="button primary" onclick={prepare} disabled={loading}>
-                    <Icon name="download" />
-                    {loading ? copy.list.loading : listError ? copy.list.retry : copy.list.action}
-                  </button>
-                  {#if listError}<p class="error" role="alert">{copy.list.errors[listError]}</p>{/if}
-                {/if}
-              {:else if key === 'offline'}
-                {#if pos === 'current'}
-                  <p class="meta">{copy.offline.lead}</p>
-                  <ul class="platforms">
-                    {#each copy.offline.platforms as p (p.name)}<li><strong>{p.name}:</strong> {p.how}</li>{/each}
-                  </ul>
-                  <p class="meta">{copy.offline.check}</p>
-                  <div class="confirm-row">
-                    <label class="confirm">
-                      <input type="checkbox" bind:checked={osConfirmed} />
-                      <span>{copy.offline.confirmLabel}</span>
+                  <p class="meta">{copy.list.helper}</p>
+                  <div class="fetch-row">
+                    <label class="field">
+                      <span>{copy.list.languageLabel}</span>
+                      <select bind:value={languageCode} disabled={loading}>
+                        {#each languages as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
+                      </select>
                     </label>
-                    <button class="button primary" onclick={confirmOffline} disabled={!osConfirmed || probe === 'pending'}>
-                      <Icon name="offline" />
-                      {copy.offline.confirm}
+                    <button class="button primary" onclick={fetchWords} disabled={loading}>
+                      {loading ? copy.list.loading : listError ? copy.list.retry : copy.list.action}
                     </button>
                   </div>
-                {:else if pos === 'done'}
-                  <p class="summary">{probe === 'skipped' ? copy.offline.skipped : copy.offline.noAnswer}</p>
+                  {#if listError}<p class="error" role="alert">{copy.list.errors[listError]}</p>{/if}
                 {/if}
               {:else if pos === 'current'}
-                <button class="button secondary" onclick={sample} disabled={!canRunSample(readiness)}>
-                  <Icon name="shuffle" />
-                  {samples.length ? copy.sample.again : copy.sample.action}
-                </button>
-                {#if rngError}<p class="error" role="alert">{copy.sample.rngError}</p>{/if}
-                {#each samples.slice(0, 2) as sampleSet, j (samples.length - j)}
-                  <div class="sample" class:older={j > 0}>
-                    <span class="tag">{copy.sample.tag}</span>
-                    <ol class="tiles" aria-label={copy.sample.label(samples.length - j)}>
-                      {#each sampleSet as word, w (w)}<li>{word}</li>{/each}
-                    </ol>
-                  </div>
-                {/each}
-                {#if sampleOk && status.canGenerate}<p class="summary">{copy.sample.nextStep}</p>{/if}
+                <p class="meta">{copy.offline.lead}</p>
+                <ul class="platforms">
+                  {#each copy.offline.platforms as p (p.name)}<li><strong>{p.name}:</strong> {p.how}</li>{/each}
+                </ul>
+                <p class="meta">{copy.offline.check}</p>
+                <StatusBand {status} />
+                <div class="confirm-row">
+                  <label class="confirm">
+                    <input type="checkbox" bind:checked={osConfirmed} bind:this={confirmBox} />
+                    <span>{copy.offline.confirmLabel}</span>
+                  </label>
+                  <button class="button primary" onclick={confirmOffline} disabled={!osConfirmed || probe === 'pending'}>
+                    <Icon name="offline" />
+                    {copy.offline.confirm}
+                  </button>
+                </div>
+              {:else if pos === 'done'}
+                <p class="summary">{probe === 'skipped' ? copy.offline.skipped : copy.offline.noAnswer}</p>
               {/if}
             </div>
           </li>
         {/each}
       </ol>
+
+      {#if stage === 'ready'}
+        <section class="ready" aria-labelledby="ready-title">
+          <h2 id="ready-title">{copy.ready.title}</h2>
+          <StatusBand {status} />
+          <p>{copy.ready.body}</p>
+        </section>
+      {/if}
     </section>
 
     <aside class="panel" aria-labelledby="panel-title">
@@ -203,6 +212,7 @@
 </div>
 
 <ConfirmDialog open={probe === 'pending'} onskip={() => skipper?.abort()} />
+<ConnectionAlert open={alertOpen} reason={alertText} onacknowledge={acknowledge} />
 
 <style>
   .canvas {
@@ -262,25 +272,6 @@
     margin: 0.35rem 0 0;
     font-size: 1rem;
     color: #dfe5f2;
-  }
-  .tools {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-  }
-  .language {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    color: #fff;
-  }
-  .language select {
-    padding: 0.45rem 0.6rem;
-    border: 1px solid #4a5d88;
-    border-radius: 10px;
-    background: var(--navy-900);
-    font-weight: 650;
   }
   .chip {
     display: flex;
@@ -428,8 +419,8 @@
     align-items: baseline;
     gap: 0.2rem 0.9rem;
   }
-  .sample,
-  .confirm-row {
+  .confirm-row,
+  .fetch-row {
     justify-self: stretch;
   }
   .confirm-row {
@@ -484,44 +475,44 @@
     accent-color: var(--navy-900);
   }
 
-  .sample {
-    position: relative;
-    padding: 1.1rem 1rem 1rem;
-    border: 2px dashed var(--cream-line);
-    border-radius: var(--radius);
+  .fetch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
   }
-  .sample.older {
-    opacity: 0.6;
-  }
-  .tag {
-    position: absolute;
-    top: -0.7rem;
-    left: 0.9rem;
-    padding: 0 0.45rem;
-    background: var(--paper);
-    color: var(--amber);
-    font-size: 0.85rem;
-    font-weight: 750;
-  }
-  .tiles {
+  .field {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-    gap: 0.6rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    gap: 0.3rem;
+    font-weight: 650;
   }
-  .tiles li {
-    padding: 0.7rem 0.5rem;
-    border: 1px solid var(--cream-line);
-    border-radius: 12px;
+  .field select {
+    min-height: 3.25rem;
+    min-width: 11rem;
+    padding: 0.6rem 0.8rem;
+    border: 2px solid var(--cream-line);
+    border-radius: var(--radius);
+    background: var(--paper);
+    font-weight: 650;
+  }
+  .ready {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding: 1.25rem;
+    border-radius: 20px;
     background: var(--cream);
-    font-size: 1.3rem;
-    font-weight: 750;
-    text-align: center;
-    overflow-wrap: anywhere;
   }
-
+  .ready h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    letter-spacing: -0.01em;
+  }
+  .ready p {
+    margin: 0;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
   .panel {
     align-self: start;
     padding: 1.4rem 1.5rem;
@@ -588,9 +579,6 @@
     }
     .button {
       width: 100%;
-    }
-    .tiles {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 </style>

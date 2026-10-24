@@ -20,6 +20,9 @@ pnpm-debug.log*
 *.local
 vite.config.*.timestamp-*
 
+# Local preview certificates
+.cert/
+
 # Environment
 .env
 .env.*

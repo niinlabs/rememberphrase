@@ -7,25 +7,25 @@ export const copy = {
     { name: 'Make it yours', hint: 'Arrange into a phrase' },
     { name: 'Remember', hint: 'Practise and safeguard' },
   ],
-  languageLabel: 'Language',
   heading: 'Step 1. Get ready',
-  intro: 'Load the word list while you are online. Then go offline before any real words are made.',
+  intro: 'Fetch the word list while you are online. Then go offline before any real words are made.',
 
   stages: {
-    language: 'Load the word list',
+    fetch: 'Fetch words',
     offline: 'Go offline',
-    sample: 'Try a disposable sample',
   },
 
   list: {
-    action: 'Prepare my words',
-    loading: 'Loading the word list…',
-    retry: 'Try again',
-    ready: (count: string) => `Word list ready in this tab: ${count} words.`,
+    languageLabel: 'Language',
+    helper: "Load the reviewed word list into this open tab while you're online. No separate file is created.",
+    action: 'Fetch words',
+    loading: 'Fetching words…',
+    retry: 'Fetch words again',
+    ready: (language: string, count: string) => `${language} words ready in this tab: ${count} words.`,
     errors: {
-      download: 'The word list could not be downloaded. Check that you are still online, then try again.',
-      version: 'The word list does not match the expected version. Reload the page while online and try again.',
-      malformed: 'The word list is damaged. Reload the page while online and try again.',
+      download: 'The word list could not be fetched. Check that you are still online, then fetch again.',
+      version: 'The word list does not match the expected version. Check that you are online, then fetch again.',
+      malformed: 'The word list arrived damaged. Check that you are online, then fetch again.',
     },
   },
 
@@ -50,13 +50,15 @@ export const copy = {
     skip: "Skip, I'm offline",
   },
 
-  sample: {
-    action: 'Try a disposable sample',
-    again: 'Try another sample',
-    label: (n: number) => `Disposable sample ${n}`,
-    tag: 'Sample, do not use',
-    rngError: "This browser can't produce the random numbers Rememberphrase needs, so no words can be made.",
-    nextStep: 'This tab is ready. Generating your real words is the next step, which is not built yet.',
+  interruption: {
+    title: 'You may still be connected',
+    next: 'Check your device, tick the confirmation again and run a new check.',
+    acknowledge: 'Acknowledge',
+  },
+
+  ready: {
+    title: 'Ready for the next step',
+    body: 'This tab has the word list and has shown it can make random words without using the network. Generating your real words is the next step, which is not built yet.',
   },
 
   band: {
@@ -65,13 +67,14 @@ export const copy = {
     'network-answered':
       'A network answered (this can be a Wi-Fi login page). You may still be connected. Generation is held; check Airplane mode and confirm again.',
     reconnected: 'Your browser reported a connection. Generation is paused; check Airplane mode and confirm again.',
-    list: 'Load the word list while you are still online.',
-    rng: "This browser can't produce the random numbers needed, so no words can be made.",
+    list: 'Fetch the word list while you are still online.',
+    rng: "This browser can't produce the random numbers Rememberphrase needs. Open Rememberphrase over https:// in an up-to-date browser.",
     unconfirmed: 'Offline status not confirmed. Go offline, then confirm.',
-    sample: 'Offline status not confirmed. Try a disposable sample.',
-    skipped: 'You skipped the connection check. You confirmed offline; word list ready in this tab.',
+    'local-check': 'Checking that this tab can make words…',
+    skipped: 'You skipped the connection check. You confirmed offline, and the word list is ready in this tab.',
     'browser-online': 'Your browser still reports a network connection. This can be a VPN or virtual adapter; check Airplane mode.',
-    green: 'You confirmed offline; word list ready in this tab. The site cannot verify Airplane mode.',
+    green: 'You confirmed offline, and the word list is ready in this tab.',
+    greenNote: "Good to know: websites can't see your device's Airplane mode setting, so this relies on your own check.",
   },
 
   chip: {
@@ -83,7 +86,7 @@ export const copy = {
   },
 
   panel: {
-    language: {
+    fetch: {
       title: 'About the word list',
       body: [
         'Your words come from the EFF Long Wordlist: 7,776 common English words, chosen to be easy to type and remember.',
@@ -98,14 +101,15 @@ export const copy = {
         'The page cannot tell for certain whether your device is offline. It relies on you, plus one short check that tries to reach Rememberphrase.',
       ],
     },
-    sample: {
-      title: 'Why a sample?',
+    ready: {
+      title: 'What this means',
       body: [
-        'A sample shows that words can be made while the network is off.',
-        'Sample words are thrown away. Never use them as a password.',
+        'After your check, this tab quietly made a few random words and threw them away, to make sure it can make words without the network. Nobody sees them.',
+        'It does not prove your device is offline. That part is your own check.',
       ],
     },
-    noStorage: 'Nothing you do here is saved, not even in your browser.',
+    noStorage:
+      'This site stores nothing in your browser: no cookies and no saved data. Your browser or device may still keep its own records, such as history.',
     attribution: 'Word list: EFF Long Wordlist by the Electronic Frontier Foundation, CC BY 4.0.',
   },
 };

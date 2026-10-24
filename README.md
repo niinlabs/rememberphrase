@@ -40,6 +40,7 @@ pnpm exec playwright install chromium webkit   # browsers for the end-to-end tes
 pnpm test                      # unit tests
 pnpm check                     # type checking
 pnpm test:e2e                  # builds the site and runs browser tests
+pnpm preview:lan               # serves the site over HTTPS on your local network for device testing
 ./scripts/verify-wp00.mjs      # checks the WP00 decisions and word-list evidence
 ./scripts/verify-wp01.mjs      # checks the Prepare step; needs a recorded real-device run
 ```

@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
 
-// WP01 browser fixtures: the Prepare step against the built site.
+// WP01 browser fixtures: the revised Prepare step against the built site.
 declare global {
   interface Window {
     cspViolations: string[];
@@ -20,17 +20,35 @@ test.beforeEach(async ({ page }) => {
 });
 
 const band = (page: Page) => page.getByTestId('status-band');
-const sampleButton = (page: Page) => page.getByRole('button', { name: /disposable sample|another sample/ });
+const chip = (page: Page) => page.getByTestId('status-chip');
+const ready = (page: Page) => page.getByRole('region', { name: copy.ready.title });
+const alert = (page: Page) => page.getByRole('alertdialog', { name: copy.interruption.title });
+const confirmBox = (page: Page) => page.getByLabel(copy.offline.confirmLabel);
+const confirmButton = (page: Page) => page.getByRole('button', { name: copy.offline.confirm });
 
-async function loadList(page: Page) {
+async function fetchWords(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: copy.list.action }).click();
-  await expect(page.getByText(copy.list.ready('7,776'))).toBeVisible();
+  await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
 }
 
 async function confirmOffline(page: Page) {
-  await page.getByLabel(copy.offline.confirmLabel).check();
-  await page.getByRole('button', { name: copy.offline.confirm }).click();
+  await confirmBox(page).check();
+  await confirmButton(page).click();
+}
+
+async function acknowledgeAlert(page: Page, reason: string) {
+  await expect(alert(page)).toBeVisible();
+  await expect(alert(page)).toContainText(reason);
+  await expect(alert(page).getByRole('button', { name: copy.interruption.acknowledge })).toBeFocused();
+  await alert(page).getByRole('button', { name: copy.interruption.acknowledge }).click();
+  await expect(alert(page)).toBeHidden();
+  // The hold stays: red explanation inside Go offline, confirmation cleared and focused, nothing ready.
+  await expect(band(page)).toContainText(reason);
+  await expect(confirmBox(page)).not.toBeChecked();
+  await expect(confirmBox(page)).toBeFocused();
+  await expect(confirmButton(page)).toBeDisabled();
+  await expect(ready(page)).toHaveCount(0);
 }
 
 async function expectNoCspViolations(page: Page) {
@@ -60,13 +78,19 @@ test('build has exactly one JS and one CSS file', () => {
   expect(files.filter((f) => f.endsWith('.css'))).toHaveLength(1);
 });
 
-test('only approved languages are offered', async ({ page }) => {
+test('stage 01 holds the language selector and a text-only Fetch words button', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByLabel(copy.languageLabel).locator('option')).toHaveText(['English']);
+  const stage = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: copy.stages.fetch }) });
+  await expect(stage.getByLabel(copy.list.languageLabel).locator('option')).toHaveText(['English']);
+  await expect(stage.getByText(copy.list.helper)).toBeVisible();
+  const fetch = stage.getByRole('button', { name: copy.list.action });
+  await expect(fetch).toBeVisible();
+  await expect(fetch.locator('svg')).toHaveCount(0);
+  await expect(page.locator('header select')).toHaveCount(0);
 });
 
-test('full offline preparation: no answer, two samples with no requests, nothing stored, then green', async ({ page, context }) => {
-  await loadList(page);
+test('offline journey: no answer, silent local check, green, nothing shown, sent or stored', async ({ page, context }) => {
+  await fetchWords(page);
   await expectAccessible(page);
   await context.setOffline(true);
   const requests: string[] = [];
@@ -74,42 +98,45 @@ test('full offline preparation: no answer, two samples with no requests, nothing
 
   await confirmOffline(page);
   await expect(page.getByText(copy.offline.noAnswer)).toBeVisible();
-  expect(requests.filter((p) => p !== '/reachability.txt')).toEqual([]);
-
-  requests.length = 0;
-  await sampleButton(page).click();
-  await sampleButton(page).click();
-  const first = await page.getByRole('list', { name: copy.sample.label(1) }).innerText();
-  const second = await page.getByRole('list', { name: copy.sample.label(2) }).innerText();
-  expect(first).not.toBe(second); // two independent 6-word draws from 7,776 words
-  expect(requests).toEqual([]);
+  await expect(ready(page)).toBeVisible();
   await expect(band(page)).toContainText(copy.band.green);
-  await expect(page.getByTestId('status-chip')).toHaveText(copy.chip.green);
+  await expect(chip(page)).toHaveText(copy.chip.green);
+  expect(requests.filter((p) => p !== '/reachability.txt')).toEqual([]); // the local check makes no requests
+  await expect(page.locator('main ol li ol, .tiles, .sample')).toHaveCount(0); // no sample words on screen
 
   await expectNoStorage(page, context);
   await expectAccessible(page);
   await expectNoCspViolations(page);
-
-  // D7 row 2: coming back online after confirmation pauses generation and reopens the offline stage.
-  await context.setOffline(false);
-  await expect(band(page)).toContainText(copy.band.reconnected);
-  await expect(page.getByRole('button', { name: copy.offline.confirm })).toBeVisible();
 });
 
-test('a reachable site holds generation, sends no cookie or referrer, and a later check is not a cached replay', async ({ page, context }) => {
-  await loadList(page);
+test('reconnecting after preparation interrupts in red, keeps the hold, and a fresh check recovers', async ({ page, context }) => {
+  await fetchWords(page);
+  await context.setOffline(true);
+  await confirmOffline(page);
+  await expect(ready(page)).toBeVisible();
+
+  await context.setOffline(false);
+  await acknowledgeAlert(page, copy.band.reconnected);
+
+  await context.setOffline(true);
+  await confirmOffline(page);
+  await expect(ready(page)).toBeVisible();
+  await expect(band(page)).toContainText(copy.band.green);
+});
+
+test('a reachable site interrupts in red, sends no cookie or referrer, and cannot be continued past', async ({ page, context }) => {
+  await fetchWords(page);
   const probe = page.waitForRequest('**/reachability.txt?*');
   await confirmOffline(page);
   const headers = await (await probe).allHeaders();
   expect(headers.cookie).toBeUndefined();
   expect(headers.referer).toBeUndefined();
-  await expect(band(page)).toContainText(copy.band['site-answered']);
-  await expect(sampleButton(page)).toHaveCount(0);
+  await acknowledgeAlert(page, copy.band['site-answered']);
+  await expect(chip(page)).toHaveText(copy.chip.red);
 
   await context.setOffline(true);
-  await page.getByRole('button', { name: copy.offline.confirm }).click();
-  await expect(page.getByText(copy.offline.noAnswer)).toBeVisible();
-  await expect(sampleButton(page)).toBeEnabled();
+  await confirmOffline(page);
+  await expect(ready(page)).toBeVisible(); // a later offline check is not a cached replay
   await expectNoCspViolations(page);
 });
 
@@ -118,93 +145,124 @@ for (const [name, response] of [
   ['an error status', { status: 503, body: 'Service unavailable' }],
   ['a captive-portal page', { status: 200, body: '<html>Log in to Wi-Fi</html>' }],
 ] as const) {
-  test(`${name} means a network answered and holds generation`, async ({ page, browserName }) => {
+  test(`${name} means a network answered and holds preparation`, async ({ page, browserName }) => {
     test.skip(name === 'a redirect' && browserName === 'webkit', 'Playwright cannot fake redirects in WebKit');
     const followed: string[] = [];
     page.on('request', (r) => r.url().startsWith('https://example.com') && followed.push(r.url()));
     await page.route('**/reachability.txt?*', (route) => route.fulfill(response));
-    await loadList(page);
+    await fetchWords(page);
     await confirmOffline(page);
-    await expect(band(page)).toContainText(copy.band['network-answered']);
-    await expect(page.getByTestId('status-chip')).toHaveText(copy.chip.red);
-    await expect(sampleButton(page)).toHaveCount(0);
+    await acknowledgeAlert(page, copy.band['network-answered']);
     expect(followed).toEqual([]);
   });
 }
 
-test('Skip cancels a pending check and leaves a labelled amber state', async ({ page, context }) => {
+test('reconnecting while the check is pending interrupts in red instead of continuing', async ({ page, context }) => {
   await page.route('**/reachability.txt?*', () => {}); // never answers
-  await loadList(page);
+  await fetchWords(page);
+  await confirmOffline(page);
+  await expect(page.getByRole('dialog', { name: copy.dialog.title })).toBeVisible();
+  await context.setOffline(true);
+  await context.setOffline(false); // the browser reports coming back online during the check
+  await expect(page.getByRole('dialog', { name: copy.dialog.title })).toBeHidden();
+  await acknowledgeAlert(page, copy.band.reconnected);
+});
+
+test('Skip cancels a pending check and leaves a labelled amber state', async ({ page }) => {
+  await page.route('**/reachability.txt?*', () => {});
+  await fetchWords(page);
   await confirmOffline(page);
   const dialog = page.getByRole('dialog', { name: copy.dialog.title });
-  await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: copy.dialog.skip })).toBeFocused();
   await expectAccessible(page);
-  await page.getByRole('button', { name: copy.dialog.skip }).click();
-  await expect(dialog).toBeHidden();
-  await context.setOffline(true);
-  await sampleButton(page).click();
+  await dialog.getByRole('button', { name: copy.dialog.skip }).click();
+  await expect(ready(page)).toBeVisible();
   await expect(band(page)).toContainText(copy.band.skipped);
-  await expect(page.getByTestId('status-chip')).toHaveText(copy.chip.skipped);
+  await expect(chip(page)).toHaveText(copy.chip.skipped);
 });
 
 test('Escape counts as Skip', async ({ page }) => {
   await page.route('**/reachability.txt?*', () => {});
-  await loadList(page);
+  await fetchWords(page);
   await confirmOffline(page);
   await expect(page.getByRole('dialog', { name: copy.dialog.title })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByText(copy.offline.skipped, { exact: true })).toBeVisible();
 });
 
-test('a browser that still reports online after a failed check stays amber but may continue', async ({ page }) => {
+test('a browser that still reports online after a failed check is amber but may continue', async ({ page }) => {
   await page.route('**/reachability.txt?*', (route) => route.abort('internetdisconnected'));
-  await loadList(page);
+  await fetchWords(page);
   await confirmOffline(page);
-  await expect(page.getByText(copy.offline.noAnswer)).toBeVisible();
-  await sampleButton(page).click();
+  await expect(ready(page)).toBeVisible();
   await expect(band(page)).toContainText(copy.band['browser-online']);
-  await expect(page.getByTestId('status-chip')).toHaveText(copy.chip['browser-online']);
+  await expect(chip(page)).toHaveText(copy.chip['browser-online']);
 });
 
-test('going offline before loading the list shows a download error, and retry works once back online', async ({ page, context }) => {
+test('going offline before fetching shows a download error, and fetching again works once back online', async ({ page, context }) => {
   await page.goto('/');
   await context.setOffline(true);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByRole('alert')).toHaveText(copy.list.errors.download);
-  await expect(band(page)).toContainText(copy.band.list);
   await context.setOffline(false);
   await page.getByRole('button', { name: copy.list.retry }).click();
-  await expect(page.getByText(copy.list.ready('7,776'))).toBeVisible();
+  await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
 });
 
-test('a tampered word list is rejected', async ({ page }) => {
+test('a tampered word list is rejected and preparation does not continue', async ({ page }) => {
   await page.route('**/wordlists/eff-large-en.txt', (route) => route.fulfill({ body: 'alfa\nbravo\n' }));
   await page.goto('/');
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByRole('alert')).toHaveText(copy.list.errors.version);
-  await expect(page.getByRole('button', { name: copy.offline.confirm })).toHaveCount(0);
+  await expect(confirmButton(page)).toHaveCount(0);
 });
 
-test('without secure random numbers nothing can be generated', async ({ page, context }) => {
+test('without a random source, preparation holds with HTTPS and browser guidance', async ({ page, context }) => {
   await page.addInitScript(() => Object.defineProperty(crypto, 'getRandomValues', { value: undefined }));
-  await loadList(page);
+  await fetchWords(page);
+  await expect(band(page)).toContainText(copy.band.rng);
+  await context.setOffline(true);
+  await confirmOffline(page);
+  await expect(ready(page)).toHaveCount(0);
+});
+
+test('a failing local check holds preparation instead of reporting ready', async ({ page, context }) => {
+  await page.addInitScript(() => {
+    crypto.getRandomValues = () => {
+      throw new Error('random source failed');
+    };
+  });
+  await fetchWords(page);
   await context.setOffline(true);
   await confirmOffline(page);
   await expect(band(page)).toContainText(copy.band.rng);
-  await expect(sampleButton(page)).toBeDisabled();
+  await expect(ready(page)).toHaveCount(0);
 });
 
 test('leaving after the list is loaded asks first, because nothing is saved', async ({ page }) => {
-  await loadList(page);
+  await fetchWords(page);
   const dialog = page.waitForEvent('dialog');
   await page.close({ runBeforeUnload: true });
   expect((await dialog).type()).toBe('beforeunload');
 });
 
-test('mobile: no horizontal scrolling and accessible at 390 × 844', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loadList(page);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await expectAccessible(page);
-});
+for (const [width, height] of [
+  [390, 844],
+  [320, 568], // roughly a 640 px window at 200% zoom
+]) {
+  test(`narrow ${width}px: no sideways scroll, caution before the confirmation, red alert in view`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await fetchWords(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const bandFirst = await page.evaluate(() => {
+      const b = document.querySelector('[data-testid="status-band"]')!;
+      const c = document.querySelector('input[type="checkbox"]')!;
+      return Boolean(b.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(bandFirst).toBe(true);
+    await expectAccessible(page);
+    await confirmOffline(page); // the preview server answers, so this goes red
+    await expect(alert(page).getByRole('button', { name: copy.interruption.acknowledge })).toBeInViewport();
+    await expect(alert(page).getByRole('heading', { name: copy.interruption.title })).toBeInViewport();
+  });
+}

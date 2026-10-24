@@ -5,14 +5,14 @@ export type Readiness = {
   rngAvailable: boolean;
   osConfirmed: boolean;
   probe: ProbeResult | null; // null until the check has finished
-  sampleOk: boolean;
+  localCheckOk: boolean; // a silent draw from the loaded list succeeded in this tab (WP00 D7 as amended)
   browserOnline: boolean; // navigator.onLine: a hint only
   reconnected: boolean; // the browser reported coming online after the user confirmed offline
 };
 
 export type Status =
   | { colour: 'red'; canGenerate: false; reason: 'site-answered' | 'network-answered' | 'reconnected' }
-  | { colour: 'amber'; canGenerate: false; reason: 'list' | 'rng' | 'unconfirmed' | 'sample' }
+  | { colour: 'amber'; canGenerate: false; reason: 'list' | 'rng' | 'unconfirmed' | 'local-check' }
   | { colour: 'amber'; canGenerate: true; reason: 'skipped' | 'browser-online' }
   | { colour: 'green'; canGenerate: true };
 
@@ -25,11 +25,11 @@ export function connectionStatus(r: Readiness): Status {
   }
   if (r.reconnected) return { colour: 'red', canGenerate: false, reason: 'reconnected' };
   if (!r.osConfirmed || r.probe === null) return { colour: 'amber', canGenerate: false, reason: 'unconfirmed' };
-  if (!r.sampleOk) return { colour: 'amber', canGenerate: false, reason: 'sample' };
+  if (!r.localCheckOk) return { colour: 'amber', canGenerate: false, reason: 'local-check' };
   if (r.probe === 'skipped') return { colour: 'amber', canGenerate: true, reason: 'skipped' };
   if (r.browserOnline) return { colour: 'amber', canGenerate: true, reason: 'browser-online' };
   return { colour: 'green', canGenerate: true };
 }
 
-// The disposable sample needs everything except a previous sample.
-export const canRunSample = (r: Readiness) => connectionStatus({ ...r, sampleOk: true }).canGenerate;
+// The silent local check may run once everything else allows generation.
+export const canRunLocalCheck = (r: Readiness) => connectionStatus({ ...r, localCheckOk: true }).canGenerate;
