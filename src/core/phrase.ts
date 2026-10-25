@@ -78,21 +78,19 @@ export function unlocksNeeded(p: Phrase, count: number) {
   return Math.max(0, remove - unlocked);
 }
 
-// D5: raising adds new draws at the end; lowering removes unlocked words from the end and never a
-// locked one. Discards step-3 changes (the caller warns first).
+// D5: raising adds new draws at the end, also to the end of the step-3 draft, which it keeps.
+// Lowering removes unlocked words from the end and never a locked one, and discards step-3 changes
+// (the caller warns first).
 export function setCount(p: Phrase, count: number, draw: Draw): Phrase {
   checkCount(count);
   if (unlocksNeeded(p, count) > 0) throw new RangeError(`Unlock ${unlocksNeeded(p, count)} more words first`);
-  let slots = p.slots;
-  let nextId = p.nextId;
-  if (count > slots.length) {
-    const added = Array.from({ length: count - slots.length }, () => ({ id: nextId++, word: draw(), locked: false }));
-    slots = [...slots, ...added];
-  } else if (count < slots.length) {
-    const drop = new Set(slots.filter((s) => !s.locked).slice(count - slots.length).map((s) => s.id));
-    slots = slots.filter((s) => !drop.has(s.id));
+  if (count > p.slots.length) {
+    const added = Array.from({ length: count - p.slots.length }, (_, k) => ({ id: p.nextId + k, word: draw(), locked: false }));
+    return { ...p, slots: [...p.slots, ...added], tokens: [...p.tokens, ...added.map(wordToken)], nextId: p.nextId + added.length };
   }
-  return baseline({ ...p, nextId }, slots);
+  if (count === p.slots.length) return baseline(p);
+  const drop = new Set(p.slots.filter((s) => !s.locked).slice(count - p.slots.length).map((s) => s.id));
+  return baseline(p, p.slots.filter((s) => !drop.has(s.id)));
 }
 
 // Words drawn more than once in the current set (D12: allowed, with a note).

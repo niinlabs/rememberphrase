@@ -178,6 +178,22 @@ test('Back keeps the draft; a reroll then warns before replacing it', async ({ p
   await expect(preview(page)).not.toContainText('Mine');
 });
 
+test('after Back, a higher count adds a word to the end of the draft without a warning; a lower one warns', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await field(page, 1).fill('Mine');
+  await page.getByRole('button', { name: copy.compose.back }).click();
+  await page.getByRole('button', { name: copy.generate.more }).click();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  const seven = (await page.locator('.tiles .word').allInnerTexts()).map((w) => w.trim());
+  expect(seven.slice(0, 6)).toEqual(words);
+  await page.getByRole('button', { name: copy.generate.continue }).click();
+  await expect(preview(page)).toHaveText(['Mine', ...seven.slice(1)].join(' '));
+
+  await page.getByRole('button', { name: copy.compose.back }).click();
+  await page.getByRole('button', { name: copy.generate.fewer }).click();
+  await expect(page.getByRole('alertdialog', { name: copy.warn.discardTitle })).toBeVisible();
+});
+
 test('Start fresh warns, then draws a new set and returns to Generate', async ({ page, context }) => {
   const words = await reachCompose(page, context);
   await page.getByRole('button', { name: copy.compose.startFresh }).click();
@@ -264,6 +280,45 @@ test('a failed Start fresh keeps the phrase, returns to Generate and holds drawi
   await expect(page.getByTestId('status-band')).toContainText(copy.band['local-check-failed']);
   expect((await page.locator('.tiles .word').allInnerTexts()).map((w) => w.trim())).toEqual(words);
   expect(errors).toEqual([]);
+});
+
+test('on phones a slim copy of the exact phrase follows you once the preview scrolls away', async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const words = await reachCompose(page, context);
+  const sticky = page.getByTestId('sticky-phrase');
+  await expect(sticky).toBeHidden(); // the preview itself is in view
+  await page.locator('section.tray').scrollIntoViewIfNeeded();
+  await expect(sticky).toBeVisible();
+  await expect(sticky.locator('p')).toHaveText(await preview(page).innerText());
+  await field(page, 6).fill(`${words[5]}!`);
+  await expect(sticky.locator('p')).toHaveText([...words.slice(0, 5), `${words[5]}!`].join(' '));
+
+  // Nothing the user works on ends up under the bar.
+  const clearOfBar = async () => {
+    const box = (await field(page, 3).boundingBox())!;
+    const bar = await sticky.boundingBox(); // null when hidden
+    return !bar || box.y >= bar.y + bar.height;
+  };
+  const toBottom = () => page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+
+  // Focus brings a field above the viewport back into view (browsers centre it).
+  await toBottom();
+  expect((await field(page, 3).boundingBox())!.y).toBeLessThan(0);
+  await field(page, 3).focus();
+  expect(await clearOfBar()).toBe(true);
+
+  // Once the bar is showing, a scroll that aligns a field to the top stops below it, not under it.
+  await toBottom();
+  await expect(sticky).toBeVisible();
+  await field(page, 3).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await expect(sticky).toBeVisible();
+  expect(await clearOfBar()).toBe(true);
+});
+
+test('wider screens never show the sticky phrase bar', async ({ page, context }) => {
+  await reachCompose(page, context);
+  await page.locator('section.tray').scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('sticky-phrase')).toBeHidden();
 });
 
 test('composing makes no requests and stores nothing; narrow screens work and pass accessibility checks', async ({ page, context }) => {

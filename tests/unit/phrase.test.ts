@@ -113,6 +113,15 @@ describe('changing the count (D5)', () => {
     expect(words(setCount(p, 6, sequence()))).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
+  test('raising keeps the arranged phrase and adds the new word at its end; lowering resets it', () => {
+    const arranged = insertConnector(setSeparator(edit(combine(six(), 'w0'), 'w2', 'Lantern1'), 'hyphen'), 'in', 1);
+    const raised = setCount(arranged, 7, sequence('extra'));
+    expect(phraseText(raised)).toBe(phraseText(arranged) + '-extra');
+    expect(intactRandomWords(raised)).toBe(intactRandomWords(arranged) + 1);
+    expect(phraseText(reset(raised))).toBe('maple orbit lantern velvet stork delay extra');
+    expect(phraseText(setCount(raised, 6, sequence()))).toBe('maple orbit lantern velvet stork delay');
+  });
+
   test('the same count keeps every word', () => {
     expect(words(setCount(six(), 6, sequence()))).toEqual(words(six()));
   });

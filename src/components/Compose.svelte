@@ -50,6 +50,21 @@
   let freshOpen = $state(false);
   let version = $state(0); // bumped on Reset so word fields show the restored text even after an invalid edit
   let list: HTMLOListElement;
+  let previewBox: HTMLElement;
+  let previewInView = $state(true);
+
+  // The phone summary bar appears only while the main preview is scrolled out of view.
+  $effect(() => {
+    const observer = new IntersectionObserver(([entry]) => (previewInView = entry.isIntersecting));
+    observer.observe(previewBox);
+    return () => observer.disconnect();
+  });
+  // Focus and scrolling stop below the bar, however many lines the phrase wraps to (0 while hidden).
+  let barHeight = $state(0);
+  $effect(() => {
+    document.documentElement.style.scrollPaddingTop = barHeight ? `${barHeight + 8}px` : '';
+    return () => (document.documentElement.style.scrollPaddingTop = '');
+  });
   let pointerStart = { x: 0, y: 0, moved: false };
 
   const text = $derived(phraseText(phrase));
@@ -185,9 +200,17 @@
   }
 </script>
 
+<!-- Phones only: a slim copy of the exact string while the preview is out of view. It reads the same
+     phrase state, is hidden from screen readers (the preview is the accessible source) and sets the
+     page's scroll padding to its height so focused fields are scrolled clear of it. -->
+<div class="sticky-phrase" class:shown={!previewInView} bind:offsetHeight={barHeight} aria-hidden="true" data-testid="sticky-phrase">
+  <span>{copy.compose.previewLabel}</span>
+  <p>{text}</p>
+</div>
+
 <h1 id="page-title" tabindex="-1">{copy.compose.heading}</h1>
 <p class="intro">{copy.compose.intro}</p>
-<section class="preview" aria-labelledby="preview-title">
+<section class="preview" aria-labelledby="preview-title" bind:this={previewBox}>
   <h2 id="preview-title">{copy.compose.previewLabel}</h2>
   <p class="phrase" data-testid="phrase-preview">{text}</p>
   <p class="counts">{copy.compose.counts(intact, phrase.slots.length, connectorCount, [...text].length)}</p>
@@ -637,7 +660,35 @@
     white-space: nowrap;
   }
 
+  .sticky-phrase {
+    display: none;
+  }
+
   @media (max-width: 600px) {
+    .sticky-phrase.shown {
+      display: block;
+      position: fixed;
+      z-index: 5;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: calc(0.45rem + env(safe-area-inset-top)) 1rem 0.5rem;
+      background: var(--navy-900);
+      color: #fff;
+      box-shadow: 0 6px 16px -10px rgb(3 8 24 / 0.8);
+    }
+    .sticky-phrase span {
+      font-size: 0.75rem;
+      font-weight: 750;
+      color: var(--yellow);
+    }
+    .sticky-phrase p {
+      margin: 0.1rem 0 0;
+      font-size: 0.98rem;
+      font-weight: 750;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
     .tokens {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }

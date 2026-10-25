@@ -75,7 +75,8 @@
     });
   }
 
-  // D5: raising draws new words (so it is gated); lowering never removes a locked word.
+  // D5: raising draws new words (so it is gated) and keeps the arranged phrase; lowering never
+  // removes a locked word and discards the arrangement, so it warns first.
   function changeCount(next: number) {
     countMessage = '';
     if (!phrase) {
@@ -84,10 +85,9 @@
     }
     const needed = unlocksNeeded(phrase, next);
     if (needed > 0) countMessage = copy.generate.unlocksNeeded(needed, next);
-    else
-      guardEdits(() => {
-        if (next < phrase!.slots.length || status.canGenerate) attempt(() => (phrase = setCount(phrase!, next, draw)));
-      });
+    else if (next > phrase.slots.length) {
+      if (status.canGenerate) attempt(() => (phrase = setCount(phrase!, next, draw)));
+    } else guardEdits(() => attempt(() => (phrase = setCount(phrase!, next, draw))));
   }
 </script>
 
