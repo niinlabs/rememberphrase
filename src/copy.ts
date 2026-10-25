@@ -25,7 +25,6 @@ export const copy = {
     errors: {
       download: 'The word list could not be fetched. Check that you are still online, then fetch again.',
       version: 'The word list does not match the expected version. Check that you are online, then fetch again.',
-      malformed: 'The word list arrived damaged. Check that you are online, then fetch again.',
     },
   },
 

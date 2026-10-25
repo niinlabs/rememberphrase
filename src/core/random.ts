@@ -12,7 +12,3 @@ export function randomIndex(
     if (buf[0] < limit) return buf[0] % n;
   }
 }
-
-export function sampleWords(words: readonly string[], count: number): string[] {
-  return Array.from({ length: count }, () => words[randomIndex(words.length)]);
-}

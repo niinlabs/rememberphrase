@@ -1,7 +1,7 @@
 export type Wordlist = { file: string; sha256: string; count: number };
 
 export class WordlistError extends Error {
-  reason: 'download' | 'version' | 'malformed';
+  reason: 'download' | 'version';
   constructor(reason: WordlistError['reason']) {
     super(reason);
     this.reason = reason;
@@ -21,12 +21,6 @@ export async function loadWordlist(list: Wordlist): Promise<string[]> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   const hash = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
   if (hash !== list.sha256) throw new WordlistError('version');
-  let words: string[];
-  try {
-    words = new TextDecoder('utf-8', { fatal: true }).decode(bytes).split('\n').filter(Boolean);
-  } catch {
-    throw new WordlistError('malformed');
-  }
-  if (words.length !== list.count || new Set(words).size !== words.length) throw new WordlistError('malformed');
-  return words;
+  // The hash pins the exact reviewed bytes, whose count and uniqueness tests/unit/wordlist.test.ts checks.
+  return new TextDecoder().decode(bytes).split('\n').filter(Boolean);
 }

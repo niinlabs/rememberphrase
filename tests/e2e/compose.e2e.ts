@@ -8,13 +8,14 @@ const tiles = (page: Page) => page.getByRole('list', { name: copy.compose.tilesL
 const handle = (page: Page, text: string) => page.getByRole('button', { name: copy.compose.handle(text), exact: true });
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
-async function reachCompose(page: Page, context: BrowserContext) {
+async function reachCompose(page: Page, context: BrowserContext, count = 6) {
   await page.goto('/');
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
   await context.setOffline(true);
   await page.getByLabel(copy.offline.confirmLabel).check();
   await page.getByRole('button', { name: copy.offline.confirm }).click();
+  for (let i = 6; i < count; i++) await page.getByRole('button', { name: copy.generate.more }).click();
   await page.getByRole('button', { name: copy.generate.generate }).click();
   const words = (await page.locator('.tiles .word').allInnerTexts()).map((w) => w.trim());
   await page.getByRole('button', { name: copy.generate.continue }).click();
@@ -313,6 +314,22 @@ test('on phones a slim copy of the exact phrase follows you once the preview scr
   await field(page, 3).evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await expect(sticky).toBeVisible();
   expect(await clearOfBar()).toBe(true);
+});
+
+test('a long phrase makes the phone bar taller, and fields still stop below it', async ({ page, context }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await reachCompose(page, context, 12);
+  for (const n of [1, 4, 7, 10]) await field(page, n).fill(`${n}`.padEnd(32, 'x'));
+  const sticky = page.getByTestId('sticky-phrase');
+  await page.locator('section.tray').scrollIntoViewIfNeeded();
+  await expect(sticky).toBeVisible();
+  const bar = (await sticky.boundingBox())!;
+  expect(bar.height).toBeGreaterThan(150); // several lines, far past the old fixed 88 px padding
+  for (const n of [9, 12]) {
+    await field(page, n).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await expect(sticky).toBeVisible();
+    expect((await field(page, n).boundingBox())!.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+  }
 });
 
 test('wider screens never show the sticky phrase bar', async ({ page, context }) => {

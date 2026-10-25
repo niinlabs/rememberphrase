@@ -5,13 +5,12 @@
   import { languages } from './wordlists';
   import { loadWordlist, WordlistError } from './core/wordlist';
   import { checkReachability, type ProbeResult } from './core/reachability';
-  import { sampleWords } from './core/random';
   import { canRunLocalCheck, connectionStatus, type Readiness } from './core/status';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import ConnectionAlert from './components/ConnectionAlert.svelte';
   import Generate from './components/Generate.svelte';
   import Compose from './components/Compose.svelte';
-  import type { Phrase } from './core/phrase';
+  import { drawFrom, type Phrase } from './core/phrase';
   import Icon from './components/Icon.svelte';
   import StatusBand from './components/StatusBand.svelte';
 
@@ -96,7 +95,8 @@
   // A failed draw holds preparation but stays retryable, from its own button or by confirming again.
   function localCheck() {
     try {
-      sampleWords(words!, 6);
+      const draw = drawFrom(words!); // the same path real draws take
+      for (let i = 0; i < 6; i++) draw();
       localCheckOk = true;
       localCheckFailed = false;
     } catch {

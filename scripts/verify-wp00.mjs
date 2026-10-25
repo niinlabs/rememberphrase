@@ -1,40 +1,21 @@
 #!/usr/bin/env node
 // WP00 verifier: approved decision record, word-list evidence, and the decision-table and
 // offline-check fixtures. Prints PASS, FAIL or BLOCKED per check; exits non-zero unless all pass.
-import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { effLargeList } from '../src/wordlists.ts';
-
-const root = new URL('..', import.meta.url);
-const REQUIRED_FIXTURES = ['tests/unit/status.test.ts', 'tests/unit/reachability.test.ts'];
-const read = (path) => readFileSync(new URL(path, root));
-const results = [];
-
-// A check returns nothing to pass, a string to fail, or ['BLOCKED', reason].
-function check(name, fn) {
-  try {
-    const problem = fn();
-    if (!problem) results.push(['PASS', name]);
-    else if (Array.isArray(problem)) results.push([problem[0], `${name}: ${problem[1]}`]);
-    else results.push(['FAIL', `${name}: ${problem}`]);
-  } catch (e) {
-    results.push(['FAIL', `${name}: ${e.message}`]);
-  }
-}
+import { check, finish, read, root, unitFixtures } from './verify-lib.mjs';
 
 check('decision record is approved and complete', () => {
-  const text = read('docs/decisions/wp00.md').toString('utf8');
+  const text = read('docs/decisions/wp00.md');
   if (!/\*\*Status: Approved \d{4}-\d{2}-\d{2}\.\*\*/.test(text)) return 'no approval status';
   const missing = Array.from({ length: 16 }, (_, i) => `D${i + 1}`).filter((d) => !text.includes(`## ${d} — `));
   if (missing.length) return `missing ${missing.join(', ')}`;
 });
 
 check('word list matches its manifest', () => {
-  const bytes = read(`public${effLargeList.file}`);
+  const bytes = readFileSync(join(root, `public${effLargeList.file}`));
   if (createHash('sha256').update(bytes).digest('hex') !== effLargeList.sha256) return 'hash mismatch';
   const words = bytes.toString('utf8').split('\n').filter(Boolean);
   if (words.length !== effLargeList.count) return `${words.length} words, expected ${effLargeList.count}`;
@@ -42,32 +23,13 @@ check('word list matches its manifest', () => {
 });
 
 check('word list is attributed', () => {
-  const text = read('ATTRIBUTION.md').toString('utf8');
+  const text = read('ATTRIBUTION.md');
   const missing = [effLargeList.licence, effLargeList.source, effLargeList.sourceSha256].filter((s) => !text.includes(s));
   if (missing.length) return `ATTRIBUTION.md lacks ${missing.join(', ')}`;
 });
 
-check('decision-table and offline-check fixtures pass', () => {
-  const missing = REQUIRED_FIXTURES.filter((f) => !existsSync(new URL(f, root)));
-  if (missing.length) return `missing ${missing.join(', ')}`;
-  const out = join(mkdtempSync(join(tmpdir(), 'verify-wp00-')), 'results.json');
-  const run = spawnSync('pnpm', ['exec', 'vitest', 'run', '--reporter=json', `--outputFile=${out}`], {
-    cwd: fileURLToPath(root),
-    encoding: 'utf8',
-  });
-  if (run.error) return ['BLOCKED', `could not run the tests (${run.error.message})`];
-  if (!existsSync(out)) return ['BLOCKED', 'the test runner produced no results'];
-  // Each required fixture must have run and passed at least one test, so an emptied or skipped file fails too.
-  const { testResults } = JSON.parse(readFileSync(out, 'utf8'));
-  for (const fixture of REQUIRED_FIXTURES) {
-    const file = testResults.find((t) => t.name.endsWith(fixture));
-    const passed = file?.assertionResults.filter((a) => a.status === 'passed').length ?? 0;
-    if (file?.status !== 'passed' || passed === 0) return `${fixture} did not run and pass`;
-  }
-  if (run.status !== 0) return 'unit tests failed; run pnpm test for details';
-});
+check('decision-table and offline-check fixtures pass', () =>
+  unitFixtures({ 'tests/unit/status.test.ts': 1, 'tests/unit/reachability.test.ts': 1 }, { all: true }),
+);
 
-for (const [result, name] of results) console.log(`${result.padEnd(7)} ${name}`);
-const overall = results.some(([r]) => r === 'FAIL') ? 'FAIL' : results.some(([r]) => r === 'BLOCKED') ? 'BLOCKED' : 'PASS';
-console.log(`WP00 ${overall}`);
-process.exit(overall === 'PASS' ? 0 : 1);
+finish('WP00');

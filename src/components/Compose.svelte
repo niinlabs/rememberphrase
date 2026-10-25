@@ -59,10 +59,11 @@
     observer.observe(previewBox);
     return () => observer.disconnect();
   });
-  // Focus and scrolling stop below the bar, however many lines the phrase wraps to (0 while hidden).
+  // Focus and scrolling stop below the bar, however many lines the phrase wraps to. On phones the bar
+  // is laid out even while invisible, so its height is known the moment it appears (0 on wider screens).
   let barHeight = $state(0);
   $effect(() => {
-    document.documentElement.style.scrollPaddingTop = barHeight ? `${barHeight + 8}px` : '';
+    document.documentElement.style.scrollPaddingTop = !previewInView && barHeight ? `${barHeight + 8}px` : '';
     return () => (document.documentElement.style.scrollPaddingTop = '');
   });
   let pointerStart = { x: 0, y: 0, moved: false };
@@ -665,7 +666,8 @@
   }
 
   @media (max-width: 600px) {
-    .sticky-phrase.shown {
+    .sticky-phrase {
+      visibility: hidden;
       display: block;
       position: fixed;
       z-index: 5;
@@ -676,6 +678,9 @@
       background: var(--navy-900);
       color: #fff;
       box-shadow: 0 6px 16px -10px rgb(3 8 24 / 0.8);
+    }
+    .sticky-phrase.shown {
+      visibility: visible;
     }
     .sticky-phrase span {
       font-size: 0.75rem;
