@@ -4,6 +4,7 @@ import {
   canReroll,
   canSplit,
   combine,
+  decorate,
   DEFAULT_WORDS,
   drawFrom,
   duplicates,
@@ -280,4 +281,37 @@ test('drawFrom only returns words from the list', () => {
   const list = ['alpha', 'bravo', 'charlie'];
   const draw = drawFrom(list);
   for (let i = 0; i < 50; i++) expect(list).toContain(draw());
+});
+
+describe('decoration (D9 as clarified 2026-10-25)', () => {
+  test('capitals, a digit and a symbol are added to the exact string, at the end for digit and symbol', () => {
+    const p = setSeparator(six(), 'hyphen');
+    expect(phraseText(decorate(p, { capitalise: 'first' }))).toBe('Maple-orbit-lantern-velvet-stork-delay');
+    expect(phraseText(decorate(p, { capitalise: 'every', digit: '7', symbol: '!' }))).toBe('Maple-Orbit-Lantern-Velvet-Stork-Delay7!');
+    const withConnector = insertConnector(p, 'the', 0);
+    expect(phraseText(decorate(withConnector, { capitalise: 'first' }))).toBe('The-maple-orbit-lantern-velvet-stork-delay');
+    expect(phraseText(decorate(edit(p, 'w0', '9lives'), { capitalise: 'every' }))).toMatch(/^9lives-Orbit/);
+  });
+
+  test('decoration keeps every intact random word, unlike typing the same change into a word', () => {
+    const decorated = decorate(six(), { capitalise: 'every', digit: '3', symbol: '#' });
+    expect(intactRandomWords(decorated)).toBe(6);
+    expect(texts(decorated)).toEqual(texts(six()));
+    expect(intactRandomWords(edit(six(), 'w0', 'Maple'))).toBe(5);
+  });
+
+  test('decoration counts as a change: Reset and lowering the count remove it, raising keeps it', () => {
+    const decorated = decorate(six(), { digit: '1' });
+    expect(hasEdits(decorated)).toBe(true);
+    expect(hasEdits(decorate(decorated, { digit: null }))).toBe(false);
+    expect(phraseText(reset(decorated))).toBe('maple orbit lantern velvet stork delay');
+    expect(phraseText(setCount(decorated, 7, sequence('extra')))).toBe('maple orbit lantern velvet stork delay extra1');
+    expect(phraseText(setCount(setCount(decorated, 7, sequence('extra')), 6, sequence()))).toBe('maple orbit lantern velvet stork delay');
+  });
+
+  test('only a single digit and the offered symbols are accepted', () => {
+    for (const bad of [{ digit: '12' }, { digit: 'a' }, { symbol: '@' }, { symbol: '!!' }])
+      expect(() => decorate(six(), bad)).toThrow(RangeError);
+    expect(() => decorate(six(), { capitalise: 'shout' as never })).toThrow(RangeError);
+  });
 });

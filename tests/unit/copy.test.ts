@@ -69,3 +69,53 @@ test('only approved languages are offered, each with a reviewed and attributed l
     expect(list.licence).not.toBe('');
   }
 });
+
+// WP03 copy fixtures: strength (D4, D8), login requirements (D9) and practice and recovery (D13).
+test('the D4 guidance and the D8 caveat use the approved wording', () => {
+  expect(copy.generate.guidance).toEqual({
+    tooFew: 'Too few random words for an important password.',
+    short: 'Shorter than we recommend for a master password or computer login.',
+    recommended: 'The length we recommend for a master password or computer login.',
+  });
+  expect(copy.remember.strengthCaveat).toBe(
+    'Based on how these words were generated. You chose which words to keep and their order; we do not count that as extra strength.',
+  );
+  expect(copy.remember.strengthNone).toBe('We cannot estimate the strength of words you wrote yourself.');
+});
+
+test('strength copy counts words and characters, never combinations or time', () => {
+  const text = [copy.remember.strengthDraws(5, 6, '7,776'), copy.remember.strengthTyped(6, 5, 40), ...copy.remember.strengthRules].join(' ');
+  expect(text).not.toMatch(/\b(combinations?|possibilit\w+|years?|days?|seconds?|guess\w*)\b|\d[\d,]* ?(x|×) ?\d/i);
+  expect(copy.remember.strengthRules.join(' ')).toMatch(/do not add strength/);
+  // Hand edits do change the guidance (an edited word stops counting), so only the D9 options may be named.
+  const unchanged = copy.remember.strengthRules.find((r) => r.includes('do not change the guidance'))!;
+  expect(unchanged).toContain('the Capitalise, Add a number and Add a symbol options');
+  expect(unchanged).not.toMatch(/\b(capitals|digits|symbols)\b/);
+});
+
+test('login requirements default to not specified and never promise acceptance', () => {
+  expect(copy.requirements.notSpecified).toBe('Requirements not specified');
+  const text = strings(copy.requirements).join(' ');
+  expect(text).not.toMatch(/\b(will (be )?accept\w*|accepted|approved|compliant|guaranteed)\b/i);
+  expect(copy.requirements.otherRules).toContain('may have other rules');
+  expect(copy.requirements.fitNote).toContain("don't change how many random words count");
+});
+
+test('practice copy says the attempt stays in the tab and names what is outside the page', () => {
+  expect(copy.remember.practiceIntro).toContain('not sent or saved');
+  expect(copy.remember.practiceLimits).toMatch(/browser.*extensions.*screen/);
+  expect(copy.remember.mismatch).not.toMatch(/should be|correct phrase is/i);
+  expect(copy.remember.cleared).toContain('may still keep its own records');
+});
+
+test('recovery copy follows D13: paper, never digital copies, and the manager kit', () => {
+  const text = copy.remember.recovery.join(' ');
+  expect(text).toContain('on paper');
+  expect(text).toMatch(/Never keep it as a photo, a cloud note, a chat message or a file/);
+  expect(text).toContain('emergency kit');
+});
+
+test('optional reading never presents Rememberphrase as a vault', () => {
+  expect(copy.remember.managers.join(' ')).toContain('Rememberphrase is not a password manager');
+  expect(strings(copy).join(' ')).not.toMatch(/\b(vault|stored safely|we keep)\b/i);
+});

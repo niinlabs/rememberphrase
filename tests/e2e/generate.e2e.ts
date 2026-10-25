@@ -54,9 +54,9 @@ test('Continue leads to Generate; the default is six words from the list, made w
 test('locked words keep their value and position through rerolls', async ({ page, context }) => {
   await reachGenerate(page, context);
   const before = await generateWords(page);
-  await page.getByRole('button', { name: copy.generate.lock(before[1]) }).click();
-  await page.getByRole('button', { name: copy.generate.lock(before[4]) }).click();
-  await expect(page.getByRole('button', { name: copy.generate.lock(before[1]) })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: copy.generate.lock(2, before[1]) }).click();
+  await page.getByRole('button', { name: copy.generate.lock(5, before[4]) }).click();
+  await expect(page.getByRole('button', { name: copy.generate.lock(2, before[1]) })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: copy.generate.reroll(4) }).click();
   const after = await shown(page);
   expect([after[1], after[4]]).toEqual([before[1], before[4]]);
@@ -66,7 +66,7 @@ test('locked words keep their value and position through rerolls', async ({ page
 
 test('with every word locked, reroll is unavailable until a word is unlocked', async ({ page, context }) => {
   await reachGenerate(page, context);
-  for (const w of await generateWords(page)) await page.getByRole('button', { name: copy.generate.lock(w) }).click();
+  for (const [i, w] of (await generateWords(page)).entries()) await page.getByRole('button', { name: copy.generate.lock(i + 1, w) }).click();
   await expect(primary(page)).toBeDisabled();
   await expect(page.getByText(copy.generate.allLocked)).toBeVisible();
   await page.getByRole('button', { name: copy.generate.unlockAll }).click();
@@ -85,19 +85,19 @@ test('the count runs from 4 to 12 with guidance, and raising keeps existing word
   await page.getByRole('button', { name: copy.generate.generate }).click();
   await expect(tiles(page)).toHaveCount(4);
   const before = await shown(page);
-  await page.getByRole('button', { name: copy.generate.lock(before[0]) }).click();
+  await page.getByRole('button', { name: copy.generate.lock(1, before[0]) }).click();
   for (let i = 0; i < 8; i++) await more.click();
   await expect(count(page)).toHaveText('12');
   await expect(more).toBeDisabled();
   const after = await shown(page);
   expect(after).toHaveLength(12);
   expect(after.slice(0, 4)).toEqual(before);
-  await expect(page.getByRole('button', { name: copy.generate.lock(before[0]) })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: copy.generate.lock(1, before[0]) })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('lowering the count never removes a locked word', async ({ page, context }) => {
   await reachGenerate(page, context);
-  for (const w of await generateWords(page)) await page.getByRole('button', { name: copy.generate.lock(w) }).click();
+  for (const [i, w] of (await generateWords(page)).entries()) await page.getByRole('button', { name: copy.generate.lock(i + 1, w) }).click();
   await page.getByRole('button', { name: copy.generate.fewer }).click();
   await expect(page.getByText(copy.generate.unlocksNeeded(1, 5))).toBeVisible();
   await expect(tiles(page)).toHaveCount(6);
@@ -137,6 +137,11 @@ test('duplicate words are allowed and pointed out', async ({ page, context }) =>
   await reachGenerate(page, context);
   await generateWords(page);
   await expect(page.getByText(copy.generate.duplicate)).toHaveCount(6); // every draw is the first word
+  // Duplicate words still get distinct lock names, so each one can be found and locked on its own.
+  const [first] = await shown(page);
+  await page.getByRole('button', { name: copy.generate.lock(2, first) }).click();
+  const pressed = await tiles(page).getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-pressed')));
+  expect(pressed).toEqual(['false', 'true', 'false', 'false', 'false', 'false']);
 });
 
 test('reconnecting on Generate holds drawing; Acknowledge returns to Go offline and the words are kept', async ({ page, context }) => {

@@ -44,6 +44,7 @@ pnpm preview:lan               # serves the site over HTTPS on your local networ
 ./scripts/verify-wp00.mjs      # checks the WP00 decisions and word-list evidence
 ./scripts/verify-wp01.mjs      # checks the Prepare step; needs a recorded real-device run
 ./scripts/verify-wp02.mjs      # checks Generate and Make it Yours; needs a recorded device and copy review
+./scripts/verify-wp03.mjs      # checks Remember and login requirements; needs recorded device, copy and security reviews
 ```
 
 Approved project decisions are recorded in [docs/decisions](docs/decisions).

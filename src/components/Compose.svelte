@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { copy } from '../copy';
+  import { copy, guidanceFor } from '../copy';
   import type { Status } from '../core/status';
   import {
     canCombine,
@@ -28,16 +28,28 @@
     type Token,
     type WordError,
   } from '../core/phrase';
+  import type { Rules } from '../core/policy';
   import Icon from './Icon.svelte';
+  import Requirements from './Requirements.svelte';
   import WarnDialog from './WarnDialog.svelte';
 
   let {
     words,
     status,
     phrase = $bindable(),
+    rules = $bindable(),
     onback,
+    oncontinue,
     ondrawfailed,
-  }: { words: string[]; status: Status; phrase: Phrase; onback: () => void; ondrawfailed: () => void } = $props();
+  }: {
+    words: string[];
+    status: Status;
+    phrase: Phrase;
+    rules: Rules;
+    onback: () => void;
+    oncontinue: () => void;
+    ondrawfailed: () => void;
+  } = $props();
 
   // Something being moved: an existing token, or a connector taken from the tray.
   type Item = { kind: 'token'; id: string } | { kind: 'connector'; text: Connector };
@@ -71,9 +83,7 @@
   const text = $derived(phraseText(phrase));
   const intact = $derived(intactRandomWords(phrase));
   const connectorCount = $derived(phrase.tokens.filter((t) => t.kind === 'connector').length);
-  const guidance = $derived(
-    intact <= 3 ? copy.generate.guidance.tooFew : intact <= 5 ? copy.generate.guidance.short : copy.generate.guidance.recommended,
-  );
+  const guidance = $derived(guidanceFor(intact));
   const separators = Object.keys(SEPARATORS) as Separator[];
   const sameItem = (a: Item | null, b: Item) =>
     !!a && a.kind === b.kind && (a.kind === 'token' ? a.id === (b as typeof a).id : a.text === (b as typeof a).text);
@@ -234,6 +244,7 @@
     </label>
   {/each}
 </fieldset>
+<Requirements bind:phrase bind:rules />
 <p class="help" id="move-help">{copy.compose.moveHelp}</p>
 
 {#if placing}
@@ -357,7 +368,10 @@
     {copy.compose.reset}
   </button>
   <button class="button secondary" onclick={() => (freshOpen = true)} disabled={!status.canGenerate}>{copy.compose.startFresh}</button>
-  <p>{copy.compose.nextStep}</p>
+  <button class="button primary" onclick={oncontinue}>
+    {copy.compose.continue}
+    <Icon name="forward" />
+  </button>
 </div>
 
 <WarnDialog
@@ -646,11 +660,6 @@
     margin-top: 1.1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--line);
-  }
-  .footer p {
-    flex-basis: 100%;
-    margin: 0;
-    color: var(--ink-soft);
   }
   .visually-hidden {
     position: absolute;

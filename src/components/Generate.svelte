@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { copy } from '../copy';
+  import { copy, guidanceFor } from '../copy';
   import type { Status } from '../core/status';
   import {
     canReroll,
@@ -60,9 +60,7 @@
   const count = $derived(phrase ? phrase.slots.length : pendingCount);
   const lockedCount = $derived(phrase ? phrase.slots.filter((s) => s.locked).length : 0);
   const intact = $derived(phrase ? intactRandomWords(phrase) : count);
-  const guidance = $derived(
-    intact <= 3 ? copy.generate.guidance.tooFew : intact <= 5 ? copy.generate.guidance.short : copy.generate.guidance.recommended,
-  );
+  const guidance = $derived(guidanceFor(intact));
   const dupes = $derived(phrase ? duplicates(phrase) : new Set<string>());
   const primaryLabel = $derived(
     !phrase ? copy.generate.generate : lockedCount === 0 ? copy.generate.newWords : copy.generate.reroll(count - lockedCount),
@@ -121,7 +119,7 @@
 
 {#if phrase}
   <ol class="tiles" aria-label={copy.generate.wordsLabel}>
-    {#each phrase.slots as slot (slot.id)}
+    {#each phrase.slots as slot, i (slot.id)}
       <li class="tile" class:locked={slot.locked}>
         <span class="word">{slot.word}</span>
         {#if dupes.has(slot.word)}<span class="dupe">{copy.generate.duplicate}</span>{/if}
@@ -130,7 +128,7 @@
           <button
             class="lock"
             aria-pressed={slot.locked}
-            aria-label={copy.generate.lock(slot.word)}
+            aria-label={copy.generate.lock(i + 1, slot.word)}
             onclick={() => (phrase = toggleLock(phrase!, slot.id))}
           >
             <Icon name={slot.locked ? 'lock' : 'unlock'} size={20} />

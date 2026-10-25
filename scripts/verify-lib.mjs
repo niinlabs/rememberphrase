@@ -39,7 +39,8 @@ export function upstream(script, label) {
   const verdict = result.stdout.trim().split('\n').pop();
   if (verdict === `${label} PASS`) return;
   if (verdict === `${label} BLOCKED`) return ['BLOCKED', `${script} is BLOCKED`];
-  return `${script} failed`;
+  const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL'));
+  return `${script} failed${failed ? ` (${failed.replace(/^FAIL\s+/, '')})` : ''}`;
 }
 
 // Each fixture file must run and pass at least `min` tests, so an emptied or skipped file fails.

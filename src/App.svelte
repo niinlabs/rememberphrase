@@ -10,7 +10,9 @@
   import ConnectionAlert from './components/ConnectionAlert.svelte';
   import Generate from './components/Generate.svelte';
   import Compose from './components/Compose.svelte';
+  import Remember from './components/Remember.svelte';
   import { drawFrom, type Phrase } from './core/phrase';
+  import { NO_RULES, type Rules } from './core/policy';
   import Icon from './components/Icon.svelte';
   import StatusBand from './components/StatusBand.svelte';
 
@@ -26,9 +28,10 @@
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
   let alertOpen = $state(false);
-  let step = $state<'prepare' | 'generate' | 'compose'>('prepare');
+  let step = $state<'prepare' | 'generate' | 'compose' | 'remember'>('prepare');
   // The phrase lives here so moving between steps never loses it (volatile tab state only).
   let phrase = $state<Phrase | null>(null);
+  let rules = $state<Rules>(NO_RULES); // login requirements the user stated (D9), volatile like the phrase
   let confirmBox = $state<HTMLInputElement>();
 
   const language = $derived(languages.find((l) => l.code === languageCode)!);
@@ -55,7 +58,7 @@
           ? copy.chip[status.reason]
           : copy.chip.notReady,
   );
-  const stepIndex = $derived({ prepare: 0, generate: 1, compose: 2 }[step]);
+  const stepIndex = $derived({ prepare: 0, generate: 1, compose: 2, remember: 3 }[step]);
   const panel = $derived(step === 'prepare' ? copy.panel[stage] : copy.panel[step]);
   const alertText = $derived(status.colour === 'red' ? copy.band[status.reason] : '');
   const count = (n: number) => new Intl.NumberFormat('en').format(n);
@@ -191,11 +194,25 @@
           {words}
           {status}
           bind:phrase
+          bind:rules
           onback={() => goTo('generate')}
+          oncontinue={() => goTo('remember')}
           ondrawfailed={() => {
             drawFailed();
             goTo('generate');
           }}
+        />
+      {:else if step === 'remember' && words}
+        <Remember
+          {phrase}
+          listSize={words.length}
+          {rules}
+          onback={() => goTo('compose')}
+          onclear={() => {
+            phrase = null;
+            rules = NO_RULES;
+          }}
+          onanother={() => goTo('generate')}
         />
       {:else}
       <h1 id="page-title" tabindex="-1">{copy.heading}</h1>

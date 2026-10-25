@@ -77,7 +77,7 @@ export const copy = {
     reroll: (n: number) => `Reroll unlocked words (${n})`,
     allLocked: 'Unlock a word to reroll.',
     unlockAll: 'Unlock all',
-    lock: (word: string) => `Lock ${word}`,
+    lock: (position: number, word: string) => `Lock word ${position}, ${word}`, // positions tell duplicate words apart (D12)
     lockedTag: 'Locked',
     unlocksNeeded: (n: number, count: number) => `Unlock ${n} ${n === 1 ? 'word' : 'words'} to go down to ${count} words.`,
     duplicate: 'This word appears twice. You can reroll it if you like.',
@@ -127,7 +127,122 @@ export const copy = {
     reset: 'Reset my changes',
     startFresh: 'Start fresh',
     back: 'Back to Generate',
-    nextStep: 'Practising your phrase is the next step, which is not built yet.',
+    continue: 'Continue to Remember',
+  },
+
+  // D9: only what the user states is checked, and a passed check is never presented as acceptance.
+  requirements: {
+    title: 'Login requirements',
+    notSpecified: 'Requirements not specified',
+    summary: (met: number, total: number) => `${met} of ${total} ${total === 1 ? 'rule' : 'rules'} met`,
+    intro: 'Optional. Enter only what the service or computer asks for, and this page checks your phrase against it.',
+    minLength: 'At least this many characters',
+    maxLength: 'At most this many characters',
+    options: {
+      upper: 'Needs an uppercase letter',
+      lower: 'Needs a lowercase letter',
+      digit: 'Needs a digit',
+      symbol: 'Needs a symbol',
+      noSpaces: "Spaces aren't allowed",
+      plainKeyboard: "I'll type it at a start-up screen or on another keyboard layout",
+    },
+    checklistTitle: 'Checked against the rules you entered',
+    rule: {
+      minLength: (n: number) => `At least ${n} characters`,
+      maxLength: (n: number) => `At most ${n} characters`,
+      upper: 'An uppercase letter',
+      lower: 'A lowercase letter',
+      digit: 'A digit',
+      symbol: 'A symbol',
+      noSpaces: 'No spaces',
+      plainKeyboard: 'No accented or special characters',
+    },
+    met: 'Met',
+    notMet: 'Not met',
+    fix: {
+      minLength: 'Add a word in Generate, or a connecting word.',
+      maxLength: 'Use fewer or shorter words.',
+      upper: 'Use Capitalise below.',
+      lower: 'Edit a word to include a lowercase letter.',
+      digit: 'Use Add a number below.',
+      symbol: 'Use Add a symbol below, or put a hyphen, period or underscore between words.',
+      noSpaces: 'Choose a hyphen, period or underscore under Between words.',
+      plainKeyboard: 'Edit words to remove accented letters or other special characters.',
+    },
+    otherRules: 'A service may have other rules. Try your phrase there.',
+    fitTitle: 'Make it fit',
+    capitaliseLegend: 'Capitalise',
+    capitalise: { none: 'No', first: 'First word', every: 'Every word' },
+    digitLabel: 'Add a number at the end',
+    symbolLabel: 'Add a symbol at the end',
+    none: 'None',
+    fitNote:
+      "These don't change how many random words count. Other changes, like @ for a, are edits: make them in a word above, and that word stops counting as random.",
+  },
+
+  remember: {
+    heading: 'Step 4. Remember your phrase',
+    intro: 'Learn your phrase, practise typing it if you like, and make a recovery copy before you close this tab.',
+    tipsTitle: 'Make it stick',
+    tips: [
+      'Picture a scene with your words in their final order. The stranger the scene, the easier it is to recall.',
+      'Say it in a rhythm, or split it into two or three groups of words.',
+      'Recall it again in a few hours and tomorrow, before you rely on it.',
+    ],
+    practiceTitle: 'Practise typing it',
+    practiceIntro: 'Type your phrase from memory. What you type stays in this tab and is not sent or saved.',
+    showPhrase: 'Show phrase',
+    hidePhrase: 'Hide phrase',
+    attemptLabel: 'Type your phrase',
+    showEntry: 'Show entry',
+    hideEntry: 'Hide entry',
+    check: 'Check',
+    match: 'That matches your phrase exactly.',
+    mismatch: "That doesn't match yet. Check capitals, spaces and what sits between words.",
+    retry: 'Try again',
+    skip: 'Skip practice',
+    practiceLimits: "Your browser, its extensions and anyone who can see your screen are outside this page's control.",
+    strengthTitle: 'How strong is this phrase?',
+    strengthDraws: (intact: number, drawn: number, list: string) =>
+      `${intact === drawn ? `All ${drawn} of your` : `${intact} of your ${drawn}`} random words are exactly as drawn. Each was picked from ${list} words.`,
+    strengthTyped: (drawn: number, typed: number, chars: number) =>
+      `Your phrase is ${typed} ${typed === 1 ? 'word' : 'words'} and ${chars} characters, made from ${drawn} random draws.`,
+    strengthNone: 'We cannot estimate the strength of words you wrote yourself.',
+    strengthCaveat:
+      'Based on how these words were generated. You chose which words to keep and their order; we do not count that as extra strength.',
+    strengthRules: [
+      'Locking, rerolling and reordering words do not add strength.',
+      'Two joined words still count as the two random words they came from, not as an extra word.',
+      'An edited word no longer counts as random. A word you replaced is your own word, even if it is in the word list.',
+      'Connecting words, separators, and the Capitalise, Add a number and Add a symbol options do not change the guidance.',
+    ],
+    moreTitle: 'Want to know more?',
+    managersTitle: 'Password managers',
+    managers: [
+      'A password manager makes and remembers a different password for each of your other accounts, so a phrase like this can be one of the few you keep in your head.',
+      "Protect the manager with a phrase like this one, and set up its recovery or emergency kit.",
+      'Rememberphrase is not a password manager and does not keep your phrase.',
+    ],
+    twoFactorTitle: 'Two-factor authentication (2FA)',
+    twoFactor: [
+      'Two-factor authentication asks for something more than your password, such as a code from an app or a security key.',
+      'Turn it on for important accounts, such as your email and your password manager, so a password alone is not enough to get in.',
+      'Keep its backup codes on paper too, stored like your recovery copy.',
+    ],
+    rulesUnmet: (n: number) => `Your phrase doesn't meet ${n} of the login rules you entered.`,
+    fixRules: 'Fix in Make it yours',
+    recoveryTitle: 'Keep a recovery copy',
+    recovery: [
+      'Write the phrase on paper and keep it away from this device, for example with your important documents.',
+      'Never keep it as a photo, a cloud note, a chat message or a file.',
+      "If this is a password manager's master password, also set up the manager's own recovery or emergency kit.",
+      "Then try it where you will use it. Practising here can't tell you whether a service will accept it.",
+    ],
+    clearHelp: 'When you have a recovery copy, clear the phrase from this page.',
+    clear: 'Clear phrase',
+    back: 'Back to Make it yours',
+    cleared: 'Your phrase is cleared from this page. Your browser or device may still keep its own records.',
+    another: 'Make another phrase',
   },
 
   warn: {
@@ -137,6 +252,9 @@ export const copy = {
     freshTitle: 'Start fresh?',
     freshBody: 'This throws away your current words and changes and draws a completely new set.',
     freshConfirm: 'Start fresh',
+    clearTitle: 'Clear your phrase?',
+    clearBody: "Make sure you have a recovery copy or know it by heart. Once it's cleared, this page can't show it again.",
+    clearConfirm: 'Clear phrase',
     cancel: 'Keep my phrase',
   },
 
@@ -199,6 +317,14 @@ export const copy = {
         'The "Your phrase as you will type it" box shows exactly what you will type, including capitals, symbols and what sits between words.',
       ],
     },
+    remember: {
+      title: 'About practising',
+      body: [
+        'The check compares what you type with your phrase exactly, here in this tab. Nothing is sent or saved.',
+        'Practice is optional, and you can try as often as you like before using the phrase for real.',
+        'Keep this tab open until you have a recovery copy. Closing or reloading it loses the phrase.',
+      ],
+    },
     ready: {
       title: 'What this means',
       body: [
@@ -211,3 +337,7 @@ export const copy = {
     attribution: 'Word list: EFF Long Wordlist by the Electronic Frontier Foundation, CC BY 4.0.',
   },
 };
+
+// D4: the guidance level follows the number of intact random words (D8).
+export const guidanceFor = (intact: number) =>
+  intact <= 3 ? copy.generate.guidance.tooFew : intact <= 5 ? copy.generate.guidance.short : copy.generate.guidance.recommended;

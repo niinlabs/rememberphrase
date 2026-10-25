@@ -9,9 +9,15 @@ export const DEFAULT_WORDS = 6;
 export const MAX_WORD_LENGTH = 32;
 export const CONNECTORS = ['the', 'a', 'and', 'in', 'on', 'with', 'for', 'of', 'to', 'at', 'under', 'near'] as const;
 export const SEPARATORS = { space: ' ', hyphen: '-', period: '.', underscore: '_' } as const;
+// D9 decoration: symbols every common keyboard layout has, and the capitalisation choices.
+export const DECORATION_SYMBOLS = ['!', '?', '#', '*', '.', '-'] as const;
+export const CAPITALISE = ['none', 'first', 'every'] as const;
 
 export type Separator = keyof typeof SEPARATORS;
 export type Connector = (typeof CONNECTORS)[number];
+export type Capitalise = (typeof CAPITALISE)[number];
+// Applied on top of the tokens when the string is built, so it never touches provenance (D9 as clarified).
+export type Decoration = { capitalise: Capitalise; digit: string | null; symbol: string | null };
 export type Draw = () => string;
 
 // A random draw. Its word changes only by reroll; locks protect it from rerolls, not from editing.
@@ -22,7 +28,7 @@ export type Token =
   | { kind: 'word'; id: string; slots: number[]; text: string; parts?: string[] }
   | { kind: 'connector'; id: string; text: Connector };
 // slots in generated order are the reset baseline; tokens and separator are the step-3 draft.
-export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; nextId: number };
+export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; decoration: Decoration; nextId: number };
 
 export type Origin = 'unchanged' | 'combined' | 'edited' | 'rewritten' | 'connector';
 export type WordError = 'empty' | 'too-long' | 'control' | 'edge-space';
@@ -33,7 +39,14 @@ export const drawFrom =
     words[randomIndex(words.length)];
 
 const wordToken = (slot: Slot): Token => ({ kind: 'word', id: `w${slot.id}`, slots: [slot.id], text: slot.word });
-const baseline = (p: Phrase, slots = p.slots): Phrase => ({ ...p, slots, tokens: slots.map(wordToken), separator: 'space' });
+const NO_DECORATION: Decoration = { capitalise: 'none', digit: null, symbol: null };
+const baseline = (p: Phrase, slots = p.slots): Phrase => ({
+  ...p,
+  slots,
+  tokens: slots.map(wordToken),
+  separator: 'space',
+  decoration: NO_DECORATION,
+});
 
 function checkCount(count: number) {
   if (!Number.isInteger(count) || count < MIN_WORDS || count > MAX_WORDS) {
@@ -52,7 +65,7 @@ function indexOf(p: Phrase, tokenId: string) {
 export function generate(count: number, draw: Draw): Phrase {
   checkCount(count);
   const slots = Array.from({ length: count }, (_, id) => ({ id, word: draw(), locked: false }));
-  return baseline({ slots, tokens: [], separator: 'space', nextId: count });
+  return baseline({ slots, tokens: [], separator: 'space', decoration: NO_DECORATION, nextId: count });
 }
 
 export const canReroll = (p: Phrase) => p.slots.some((s) => !s.locked);
@@ -105,7 +118,9 @@ export function duplicates(p: Phrase): Set<string> {
 export const reset = (p: Phrase): Phrase => baseline(p);
 
 export const hasEdits = (p: Phrase) =>
-  p.separator !== 'space' || JSON.stringify(p.tokens) !== JSON.stringify(p.slots.map(wordToken));
+  p.separator !== 'space' ||
+  JSON.stringify(p.decoration) !== JSON.stringify(NO_DECORATION) ||
+  JSON.stringify(p.tokens) !== JSON.stringify(p.slots.map(wordToken));
 
 export function move(p: Phrase, tokenId: string, to: number): Phrase {
   const tokens = [...p.tokens];
@@ -185,8 +200,25 @@ export function removeConnector(p: Phrase, tokenId: string): Phrase {
 
 export const setSeparator = (p: Phrase, separator: Separator): Phrase => ({ ...p, separator });
 
-// The exact string the user will type: what the preview shows, copy copies and practice uses.
-export const phraseText = (p: Phrase) => p.tokens.map((t) => t.text).join(SEPARATORS[p.separator]);
+// D9: a digit or symbol of the user's choice (null removes it), added at the end.
+export function decorate(p: Phrase, change: Partial<Decoration>): Phrase {
+  const decoration = { ...p.decoration, ...change };
+  if (!CAPITALISE.includes(decoration.capitalise)) throw new RangeError('Unknown capitalisation');
+  if (decoration.digit !== null && !/^[0-9]$/.test(decoration.digit)) throw new RangeError('Not a digit');
+  if (decoration.symbol !== null && !(DECORATION_SYMBOLS as readonly string[]).includes(decoration.symbol)) {
+    throw new RangeError('Not an offered symbol');
+  }
+  return { ...p, decoration };
+}
+
+const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+// The exact string the user will type: what the preview shows and practice compares against.
+export function phraseText(p: Phrase) {
+  const { capitalise, digit, symbol } = p.decoration;
+  const texts = p.tokens.map((t, i) => (capitalise === 'every' || (capitalise === 'first' && i === 0) ? capitalised(t.text) : t.text));
+  return texts.join(SEPARATORS[p.separator]) + (digit ?? '') + (symbol ?? '');
+}
 
 // --- Provenance (D8) -----------------------------------------------------------------------
 

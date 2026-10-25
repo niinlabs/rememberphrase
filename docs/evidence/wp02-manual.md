@@ -23,5 +23,5 @@ Use the setup from `docs/evidence/wp01-manual-offline.md`: run `pnpm preview:lan
 - Browser and version: Safari on the iPhone, Firefox on the Mac; versions not recorded
 - Screen reader: not run; step 8 deferred
 - Copy review notes: wording accepted for now (step 9)
-- Notes: Includes the 2026-10-25 change to D5: raising the count after Make it Yours edits keeps the arranged phrase.
+- Notes: Includes the 2026-10-25 change to D5: raising the count after Make it Yours edits keeps the arranged phrase. Later on 2026-10-25, the phone summary bar was re-checked on the iPhone after it was changed to follow its own height: it looked right.
 - Result: partial — steps 1–7 and 9 passed on both devices; step 8 deferred

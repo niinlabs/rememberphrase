@@ -208,7 +208,7 @@ test('Start fresh warns, then draws a new set and returns to Generate', async ({
 test('locks show on Make it Yours but do not stop editing', async ({ page, context }) => {
   const words = await reachCompose(page, context);
   await page.getByRole('button', { name: copy.compose.back }).click();
-  await page.getByRole('button', { name: copy.generate.lock(words[2]) }).click();
+  await page.getByRole('button', { name: copy.generate.lock(3, words[2]) }).click();
   await page.getByRole('button', { name: copy.generate.continue }).click();
   await expect(tiles(page).nth(2)).toContainText(copy.compose.lockedNote);
   await field(page, 3).fill(`${words[2]}!`);
