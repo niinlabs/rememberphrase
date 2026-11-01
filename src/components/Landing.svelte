@@ -19,7 +19,7 @@
           {#each example.words as word (word)}<li>{word}</li>{/each}
         </ul>
         <p class="label">{copy.landing.storyLabel}</p>
-        <!-- Connecting words are set apart, so the six random words stay recognisable in the story. -->
+        <!-- Connecting words are set apart, so the six list words stay recognisable in the story. -->
         <p class="story" data-testid="example-story">
           <!-- Svelte drops whitespace between elements, so the spaces between words are written out. -->
           {#each example.story.split(' ') as token, i (i)}{i > 0 ? ' ' : ''}<span class:connector={!example.words.includes(token)}>{token}</span>{/each}

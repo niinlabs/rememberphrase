@@ -4,8 +4,9 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: '*.e2e.ts',
   use: { baseURL: 'http://localhost:4173' },
+  // Tests build into their own folder, so a run never swaps files under the LAN preview, which serves dist/.
   webServer: {
-    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
+    command: 'pnpm build --outDir dist-e2e && pnpm preview --outDir dist-e2e --port 4173 --strictPort',
     url: 'http://localhost:4173',
   },
   projects: [

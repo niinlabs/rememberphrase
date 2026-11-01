@@ -75,7 +75,7 @@ async function expectAccessible(page: Page) {
 }
 
 test('build has exactly one JS and one CSS file', () => {
-  const files = readdirSync('dist/assets');
+  const files = readdirSync('dist-e2e/assets');
   expect(files.filter((f) => f.endsWith('.js'))).toHaveLength(1);
   expect(files.filter((f) => f.endsWith('.css'))).toHaveLength(1);
 });

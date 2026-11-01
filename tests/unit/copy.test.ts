@@ -138,8 +138,14 @@ test('each landing example is six list words, each used once, arranged with appr
 test('the landing says what the site is not, labels the examples and makes no resume promise', () => {
   expect(copy.landing.intro.join(' ')).toContain('It is not a password manager');
   expect(copy.landing.examplesOnly).toBe('Examples only. Do not use these as passwords.');
-  expect(copy.landing.examplesNote).toContain('Only the six random words count toward strength');
+  // The examples were picked by hand, so only words drawn in a visitor's own tab may be tied to strength.
+  expect(copy.landing.wordsLabel).not.toMatch(/random/i);
+  expect(copy.landing.examplesNote).toContain('picked by hand');
+  expect(copy.landing.examplesNote).toContain('drawn at random in your tab');
+  expect(copy.landing.examplesNote).not.toMatch(/(six|these) (random )?words count/i);
   expect(copy.landing.tabNote).toContain('Nothing is saved');
   expect(strings(copy.landing).join(' ')).not.toMatch(/\b(resume|continue where|saved progress|we remember)\b/i);
   expect(copy.landing.start).toBe('Start making a passphrase');
+  // Step 1 tells Mac users to turn off Wi-Fi and unplug cables, so the landing must not promise Airplane mode.
+  expect(strings(copy.landing).concat(copy.panel.landing.body).join(' ')).not.toMatch(/airplane/i);
 });

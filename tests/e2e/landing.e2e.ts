@@ -46,7 +46,7 @@ test('the one start button comes last and opens Step 1 with focus on its heading
   expect(prepRequests(requests)).toHaveLength(1);
 });
 
-test('the examples show six random words arranged with connecting words, and are labelled not for use', async ({ page }) => {
+test('the examples show six hand-picked list words arranged with connecting words, and are labelled not for use', async ({ page }) => {
   await page.goto('/');
   const stories = page.getByTestId('example-story');
   await expect(stories).toHaveCount(copy.landing.examples.length);

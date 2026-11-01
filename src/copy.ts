@@ -7,8 +7,8 @@ export const copy = {
     { name: 'Make it yours', hint: 'Arrange into a phrase' },
     { name: 'Remember', hint: 'Practise and safeguard' },
   ],
-  // WP04: the unnumbered introduction. The examples are fixed public text built only from list words and
-  // approved connecting words, never a phrase drawn in anyone's session.
+  // WP04: the unnumbered introduction. The examples are fixed public text, hand-picked from the list and
+  // arranged with approved connecting words: illustrations, never a draw, so they make no strength claim.
   landing: {
     heading: 'Make a passphrase you can remember',
     intro: [
@@ -16,7 +16,7 @@ export const copy = {
       'It is not a password manager, and it does not store your phrase.',
     ],
     examplesTitle: 'For example',
-    wordsLabel: 'Random words',
+    wordsLabel: 'Words from the list',
     storyLabel: 'Arranged into a picture',
     examples: [
       {
@@ -29,7 +29,8 @@ export const copy = {
       },
     ],
     examplesOnly: 'Examples only. Do not use these as passwords.',
-    examplesNote: 'The small words in between, like "with" and "the", are your own choice. Only the six random words count toward strength.',
+    examplesNote:
+      'These words were picked by hand to show the idea. Your own words are drawn at random in your tab, and only those, kept unchanged, count toward strength. The small words in between, like "with" and "the", are always your own choice.',
     nextTitle: 'What happens next',
     next: [
       'Fetch the word list while you are online.',
@@ -323,7 +324,7 @@ export const copy = {
       title: 'Before you start',
       body: [
         'Your words are made here in this browser tab, on your device. This page never sends them anywhere.',
-        'Partway through you will switch on Airplane mode, so set aside a few quiet minutes.',
+        'Partway through you will disconnect from every network, so set aside a few quiet minutes.',
       ],
     },
     fetch: {

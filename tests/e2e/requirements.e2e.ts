@@ -44,7 +44,9 @@ test('stated rules are checked, and the fit controls meet them without losing ra
   await openSection(page);
   for (const id of ['upper', 'digit', 'symbol', 'noSpaces'] as const) await page.getByLabel(copy.requirements.options[id]).check();
   await expect(checklist(page)).toHaveCount(4);
-  await expect(status(page)).toHaveText(copy.requirements.summary(0, 4));
+  // Four list words (drop-down, felt-tip, t-shirt, yo-yo) carry a hyphen, which already counts as a symbol.
+  const hyphenated = words.some((w) => w.includes('-'));
+  await expect(status(page)).toHaveText(copy.requirements.summary(hyphenated ? 1 : 0, 4));
   await expect(item(page, copy.requirements.rule.upper)).toContainText(copy.requirements.fix.upper);
   await expect(item(page, copy.requirements.rule.noSpaces)).toContainText(copy.requirements.fix.noSpaces);
   await expect(page.getByText(copy.requirements.otherRules)).toBeVisible();
