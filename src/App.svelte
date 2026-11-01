@@ -309,34 +309,14 @@
 <ConnectionAlert open={alertOpen} reason={alertText} onacknowledge={acknowledge} />
 
 <style>
+  /* Navy throughout, with a faint warmth of the logo's yellow at the top right and lower left. */
   .canvas {
-    position: relative;
     min-height: 100vh;
     padding: 1.25rem clamp(1rem, 4vw, 3rem) 2.5rem;
-    overflow: hidden;
-    isolation: isolate;
-  }
-  /* The yellow bands sit behind the card, never under text. */
-  .canvas::before,
-  .canvas::after {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    background: var(--yellow);
-  }
-  .canvas::before {
-    left: 0;
-    top: 9rem;
-    width: 22vw;
-    height: 26rem;
-    clip-path: polygon(0 18%, 100% 52%, 100% 74%, 0 100%);
-  }
-  .canvas::after {
-    right: 0;
-    top: 5.5rem;
-    width: 20vw;
-    height: 18rem;
-    clip-path: polygon(0 34%, 100% 0, 100% 100%, 64% 100%);
+    background:
+      radial-gradient(56rem 34rem at 100% 0%, color-mix(in srgb, var(--yellow) 30%, transparent), transparent 70%),
+      radial-gradient(48rem 32rem at 0% 100%, color-mix(in srgb, var(--yellow) 16%, transparent), transparent 70%),
+      linear-gradient(165deg, var(--navy-900), var(--navy-950) 60%);
   }
 
   .masthead {
@@ -646,10 +626,6 @@
     }
   }
   @media (max-width: 600px) {
-    .canvas::before,
-    .canvas::after {
-      display: none;
-    }
     .tagline {
       font-size: 0.9rem;
     }
