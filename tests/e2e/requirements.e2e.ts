@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
+import { startAtStep1 } from './start';
 
 // WP03 slice 3 browser fixtures: login requirements (D9) and the decoration controls.
 const section = (page: Page) => page.locator('details.requirements');
@@ -11,7 +12,7 @@ const field = (page: Page, n: number) => page.getByRole('textbox', { name: new R
 const item = (page: Page, text: string) => checklist(page).filter({ hasText: text });
 
 async function reachCompose(page: Page, context: BrowserContext) {
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
   await context.setOffline(true);

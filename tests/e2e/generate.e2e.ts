@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
+import { startAtStep1 } from './start';
 
 // WP02 slice 2 browser fixtures: the Generate step.
 const LIST = new Set(readFileSync('public/wordlists/eff-large-en.txt', 'utf8').split('\n').filter(Boolean));
@@ -12,7 +13,7 @@ const primary = (page: Page) => page.getByRole('button', { name: /Generate rando
 const count = (page: Page) => page.locator('output');
 
 async function reachGenerate(page: Page, context: BrowserContext) {
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
   await context.setOffline(true);
@@ -121,7 +122,7 @@ test('before the first draw there are no tiles or connecting words; afterwards t
 
 test('an allowed amber reason stays visible after drawing', async ({ page }) => {
   await page.route('**/reachability.txt?*', (route) => route.abort('internetdisconnected')); // browser still online
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await page.getByLabel(copy.offline.confirmLabel).check();
   await page.getByRole('button', { name: copy.offline.confirm }).click();

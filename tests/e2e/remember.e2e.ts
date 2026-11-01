@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
+import { startAtStep1 } from './start';
 
 // WP03 slice 1 browser fixtures: Remember, practise and clear. The phrase is a fresh random draw in
 // a test browser, never a real secret, and nothing here prints it.
@@ -11,7 +12,7 @@ const reveal = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) ph
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
 async function reachCompose(page: Page, context: BrowserContext, count = 6) {
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
   await context.setOffline(true);

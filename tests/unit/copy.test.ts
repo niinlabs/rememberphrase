@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { copy } from '../../src/copy';
-import { languages } from '../../src/wordlists';
+import { CONNECTORS } from '../../src/core/phrase';
+import { effLargeList, languages } from '../../src/wordlists';
 
 // Copy fixtures moved from WP00: no false precision or false safety claims, no unsupported locale.
 const strings = (value: unknown): string[] =>
@@ -118,4 +120,26 @@ test('recovery copy follows D13: paper, never digital copies, and the manager ki
 test('optional reading never presents Rememberphrase as a vault', () => {
   expect(copy.remember.managers.join(' ')).toContain('Rememberphrase is not a password manager');
   expect(strings(copy).join(' ')).not.toMatch(/\b(vault|stored safely|we keep)\b/i);
+});
+
+// WP04 copy fixtures: the landing examples are fixed public text the tool itself could produce.
+test('each landing example is six list words, each used once, arranged with approved connecting words only', () => {
+  const list = new Set(readFileSync(`public${effLargeList.file}`, 'utf8').split('\n').filter(Boolean));
+  expect(copy.landing.examples.length).toBeGreaterThan(0);
+  for (const { words, story } of copy.landing.examples) {
+    expect(words).toHaveLength(6);
+    for (const w of words) expect(list.has(w), w).toBe(true);
+    const tokens = story.split(' ');
+    expect(tokens.filter((t) => words.includes(t)).sort()).toEqual([...words].sort());
+    for (const t of tokens.filter((t) => !words.includes(t))) expect(CONNECTORS as readonly string[]).toContain(t);
+  }
+});
+
+test('the landing says what the site is not, labels the examples and makes no resume promise', () => {
+  expect(copy.landing.intro.join(' ')).toContain('It is not a password manager');
+  expect(copy.landing.examplesOnly).toBe('Examples only. Do not use these as passwords.');
+  expect(copy.landing.examplesNote).toContain('Only the six random words count toward strength');
+  expect(copy.landing.tabNote).toContain('Nothing is saved');
+  expect(strings(copy.landing).join(' ')).not.toMatch(/\b(resume|continue where|saved progress|we remember)\b/i);
+  expect(copy.landing.start).toBe('Start making a passphrase');
 });

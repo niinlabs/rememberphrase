@@ -11,6 +11,7 @@
   import Generate from './components/Generate.svelte';
   import Compose from './components/Compose.svelte';
   import Remember from './components/Remember.svelte';
+  import Landing from './components/Landing.svelte';
   import { drawFrom, type Phrase } from './core/phrase';
   import { NO_RULES, type Rules } from './core/policy';
   import Icon from './components/Icon.svelte';
@@ -28,7 +29,7 @@
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
   let alertOpen = $state(false);
-  let step = $state<'prepare' | 'generate' | 'compose' | 'remember'>('prepare');
+  let step = $state<'landing' | 'prepare' | 'generate' | 'compose' | 'remember'>('landing');
   // The phrase lives here so moving between steps never loses it (volatile tab state only).
   let phrase = $state<Phrase | null>(null);
   let rules = $state<Rules>(NO_RULES); // login requirements the user stated (D9), volatile like the phrase
@@ -58,7 +59,7 @@
           ? copy.chip[status.reason]
           : copy.chip.notReady,
   );
-  const stepIndex = $derived({ prepare: 0, generate: 1, compose: 2, remember: 3 }[step]);
+  const stepIndex = $derived({ landing: -1, prepare: 0, generate: 1, compose: 2, remember: 3 }[step]); // the introduction is unnumbered
   const panel = $derived(step === 'prepare' ? copy.panel[stage] : copy.panel[step]);
   const alertText = $derived(status.colour === 'red' ? copy.band[status.reason] : '');
   const count = (n: number) => new Intl.NumberFormat('en').format(n);
@@ -160,10 +161,13 @@
       <p class="wordmark"><img src={logo} alt="Rememberphrase" width="640" height="96" /></p>
       <p class="tagline">{copy.tagline}</p>
     </div>
-    <p class="chip {status.colour}" data-testid="status-chip">
-      <Icon name={status.colour === 'red' ? 'hold' : status.colour === 'green' ? 'ready' : 'pending'} size={20} />
-      {chip}
-    </p>
+    <!-- Nothing about the connection is known or relevant until Step 1 starts. -->
+    {#if step !== 'landing'}
+      <p class="chip {status.colour}" data-testid="status-chip">
+        <Icon name={status.colour === 'red' ? 'hold' : status.colour === 'green' ? 'ready' : 'pending'} size={20} />
+        {chip}
+      </p>
+    {/if}
   </header>
 
   <nav class="stepper" aria-label="Progress">
@@ -179,7 +183,9 @@
 
   <main class="card">
     <section class="work" aria-labelledby="page-title">
-      {#if step === 'generate' && words}
+      {#if step === 'landing'}
+        <Landing onstart={() => goTo('prepare')} />
+      {:else if step === 'generate' && words}
         <Generate
           {words}
           {status}

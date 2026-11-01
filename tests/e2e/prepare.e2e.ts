@@ -2,6 +2,7 @@ import { readdirSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
+import { startAtStep1 } from './start';
 
 // WP01 browser fixtures: the revised Prepare step against the built site.
 declare global {
@@ -28,7 +29,7 @@ const confirmBox = (page: Page) => page.getByLabel(copy.offline.confirmLabel);
 const confirmButton = (page: Page) => page.getByRole('button', { name: copy.offline.confirm });
 
 async function fetchWords(page: Page) {
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
 }
@@ -80,7 +81,7 @@ test('build has exactly one JS and one CSS file', () => {
 });
 
 test('the header shows the logo, loaded from this site, with its name as alt text', async ({ page }) => {
-  await page.goto('/');
+  await startAtStep1(page);
   const logo = page.getByRole('banner').getByRole('img', { name: 'Rememberphrase' });
   await expect(logo).toBeVisible();
   expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(640);
@@ -89,7 +90,7 @@ test('the header shows the logo, loaded from this site, with its name as alt tex
 });
 
 test('stage 01 holds the language selector and a text-only Fetch words button', async ({ page }) => {
-  await page.goto('/');
+  await startAtStep1(page);
   const stage = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: copy.stages.fetch }) });
   await expect(stage.getByLabel(copy.list.languageLabel).locator('option')).toHaveText(['English']);
   await expect(stage.getByText(copy.list.helper)).toBeVisible();
@@ -211,7 +212,7 @@ test('a browser that still reports online after a failed check is amber but may 
 });
 
 test('going offline before fetching shows a download error, and fetching again works once back online', async ({ page, context }) => {
-  await page.goto('/');
+  await startAtStep1(page);
   await context.setOffline(true);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByRole('alert')).toHaveText(copy.list.errors.download);
@@ -222,7 +223,7 @@ test('going offline before fetching shows a download error, and fetching again w
 
 test('a tampered word list is rejected and preparation does not continue', async ({ page }) => {
   await page.route('**/wordlists/eff-large-en.txt', (route) => route.fulfill({ body: 'alfa\nbravo\n' }));
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByRole('alert')).toHaveText(copy.list.errors.version);
   await expect(confirmButton(page)).toHaveCount(0);

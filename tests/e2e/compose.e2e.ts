@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { copy } from '../../src/copy';
+import { startAtStep1 } from './start';
 
 // WP02 slice 3 browser fixtures: Make it Yours.
 const preview = (page: Page) => page.getByTestId('phrase-preview');
@@ -9,7 +10,7 @@ const handle = (page: Page, text: string) => page.getByRole('button', { name: co
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
 async function reachCompose(page: Page, context: BrowserContext, count = 6) {
-  await page.goto('/');
+  await startAtStep1(page);
   await page.getByRole('button', { name: copy.list.action }).click();
   await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
   await context.setOffline(true);

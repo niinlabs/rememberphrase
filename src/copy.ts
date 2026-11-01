@@ -7,6 +7,39 @@ export const copy = {
     { name: 'Make it yours', hint: 'Arrange into a phrase' },
     { name: 'Remember', hint: 'Practise and safeguard' },
   ],
+  // WP04: the unnumbered introduction. The examples are fixed public text built only from list words and
+  // approved connecting words, never a phrase drawn in anyone's session.
+  landing: {
+    heading: 'Make a passphrase you can remember',
+    intro: [
+      "Rememberphrase helps you turn random words into a phrase you can picture and type. It is for one of the few passwords you need to remember, such as your password manager's master password or your computer login.",
+      'It is not a password manager, and it does not store your phrase.',
+    ],
+    examplesTitle: 'For example',
+    wordsLabel: 'Random words',
+    storyLabel: 'Arranged into a picture',
+    examples: [
+      {
+        words: ['drizzle', 'cactus', 'lantern', 'velvet', 'raft', 'pancake'],
+        story: 'velvet cactus on a raft with the lantern in pancake drizzle',
+      },
+      {
+        words: ['snowman', 'banjo', 'igloo', 'mustard', 'walrus', 'rocket'],
+        story: 'snowman with a banjo in the igloo near mustard walrus rocket',
+      },
+    ],
+    examplesOnly: 'Examples only. Do not use these as passwords.',
+    examplesNote: 'The small words in between, like "with" and "the", are your own choice. Only the six random words count toward strength.',
+    nextTitle: 'What happens next',
+    next: [
+      'Fetch the word list while you are online.',
+      'Go offline, then make your own random words in this tab.',
+      'Arrange them into your phrase, practise it and keep a recovery copy.',
+    ],
+    tabNote: 'Keep this tab open from start to finish. Nothing is saved, so closing or reloading it starts over.',
+    start: 'Start making a passphrase',
+  },
+
   heading: 'Step 1. Get ready',
   intro: 'Fetch the word list while you are online. Then go offline before any real words are made.',
 
@@ -286,6 +319,13 @@ export const copy = {
   },
 
   panel: {
+    landing: {
+      title: 'Before you start',
+      body: [
+        'Your words are made here in this browser tab, on your device. This page never sends them anywhere.',
+        'Partway through you will switch on Airplane mode, so set aside a few quiet minutes.',
+      ],
+    },
     fetch: {
       title: 'About the word list',
       body: [
