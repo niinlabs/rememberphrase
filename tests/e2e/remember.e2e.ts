@@ -236,6 +236,68 @@ test('Want to know more? is optional reading after the recovery copy, about mana
   await expect(more.getByText('Rememberphrase is not a password manager and does not keep your phrase.')).toBeVisible();
 });
 
+// Checks that one phrase state drives everything: the Make it Yours counts and login checklist, then in
+// Remember the rule reminder, the strength details and the exact string practice accepts. It leaves a
+// wrong attempt behind each time, so the next visit proves an old attempt never survives a change.
+async function checkEverywhere(page: Page, s: { intact: number; typed: number; connectors: number; spaces: boolean }) {
+  const phrase = await page.getByTestId('phrase-preview').innerText();
+  const chars = [...phrase].length;
+  await expect(page.getByText(copy.compose.counts(s.intact, 6, s.connectors, chars))).toBeVisible();
+  await expect(page.locator('details.requirements .status')).toHaveText(copy.requirements.summary(s.spaces ? 0 : 1, 1));
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await expect(entry(page)).toHaveValue('');
+  await expect(page.getByText(copy.remember.rulesUnmet(1))).toHaveCount(s.spaces ? 1 : 0);
+  await details(page).locator('summary').click();
+  await expect(details(page).getByText(copy.remember.strengthDraws(s.intact, 6, '7,776'))).toBeVisible();
+  await expect(details(page).getByText(copy.remember.strengthTyped(6, s.typed, chars))).toBeVisible();
+  await entry(page).fill(phrase);
+  await page.getByRole('button', { name: copy.remember.check, exact: true }).click();
+  await expect(result(page)).toHaveText(copy.remember.match);
+  await entry(page).fill(`${phrase}x`);
+  await page.getByRole('button', { name: copy.remember.back }).click();
+  return phrase;
+}
+
+test('every change in Make it Yours or Generate reaches the counts, the login check, the strength details and practice together', async ({ page, context }) => {
+  test.slow(); // eleven round trips between Make it Yours and Remember
+  await reachCompose(page, context);
+  await page.locator('details.requirements summary').click();
+  await page.getByLabel(copy.requirements.options.noSpaces).check();
+  const seen = [await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })];
+  const changed = async (s: Parameters<typeof checkEverywhere>[1]) => {
+    const phrase = await checkEverywhere(page, s);
+    expect(seen.at(-1)).not.toBe(phrase);
+    seen.push(phrase);
+  };
+
+  await page.locator('[data-handle]').first().press('ArrowRight'); // reorder
+  await changed({ intact: 6, typed: 6, connectors: 0, spaces: true });
+  const first = await field(page, 1).inputValue();
+  await page.getByRole('button', { name: `${copy.compose.join}: ${first}` }).click();
+  await changed({ intact: 6, typed: 5, connectors: 0, spaces: true });
+  await page.getByRole('button', { name: `${copy.compose.split}: ${await field(page, 1).inputValue()}` }).click();
+  await changed({ intact: 6, typed: 6, connectors: 0, spaces: true });
+  await field(page, 2).fill(`${await field(page, 2).inputValue()}9`); // partial edit
+  await changed({ intact: 5, typed: 6, connectors: 0, spaces: true });
+  await page.getByRole('button', { name: 'the', exact: true }).click();
+  await page.getByRole('button', { name: copy.compose.insertHere('the', 2) }).click();
+  await changed({ intact: 5, typed: 7, connectors: 1, spaces: true });
+  await page.getByRole('radio', { name: copy.compose.separators.hyphen }).check();
+  await changed({ intact: 5, typed: 7, connectors: 1, spaces: false });
+  await page.getByRole('button', { name: copy.compose.remove('the') }).click();
+  await changed({ intact: 5, typed: 6, connectors: 0, spaces: false });
+  await field(page, 3).fill('Qzv'); // full rewrite
+  await changed({ intact: 4, typed: 6, connectors: 0, spaces: false });
+
+  await page.getByRole('button', { name: copy.compose.reset }).click();
+  expect(await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })).toBe(seen[0]);
+
+  await page.getByRole('button', { name: copy.compose.back }).click();
+  await page.getByRole('button', { name: copy.generate.newWords }).click(); // no edits left, so no warning
+  await page.getByRole('button', { name: copy.generate.continue }).click();
+  expect(await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })).not.toBe(seen[0]);
+});
+
 test('practising makes no requests, stores nothing and has no form; narrow screens work and pass accessibility checks', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const phrase = await reachRemember(page, context);
