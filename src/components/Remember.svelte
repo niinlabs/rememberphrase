@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { copy, guidanceFor } from '../copy';
-  import { intactRandomWords, phraseText, type Phrase } from '../core/phrase';
+  import { drawsInPhrase, intactRandomWords, phraseText, type Phrase } from '../core/phrase';
   import { checkRules, type Rules } from '../core/policy';
   import Icon from './Icon.svelte';
   import WarnDialog from './WarnDialog.svelte';
@@ -28,17 +28,32 @@
   let attempt = $state('');
   let masked = $state(true);
   let result = $state<'match' | 'mismatch' | null>(null);
+  let autoCheck = $state(false);
   let clearOpen = $state(false);
   let entry = $state<HTMLInputElement>();
-  let recoveryTitle = $state<HTMLElement>();
 
   const text = $derived(phrase ? phraseText(phrase) : '');
   const intact = $derived(phrase ? intactRandomWords(phrase) : 0);
-  const drawn = $derived(phrase ? phrase.slots.length : 0);
+  const drawn = $derived(phrase ? drawsInPhrase(phrase) : 0); // removed words no longer count as drawn
   const unmet = $derived(checkRules(text, rules).filter((c) => !c.met).length);
 
   // Exact comparison with the string the preview showed, so case, separators and symbols all count.
   const check = () => (result = attempt === text ? 'match' : 'mismatch');
+  // Check as I type: says whether what is typed so far still leads to the phrase, without showing it.
+  const live = $derived.by(() => {
+    if (!autoCheck || !attempt) return null;
+    if (attempt === text) return 'match';
+    if (text.startsWith(attempt)) return 'short';
+    return attempt.startsWith(text) ? 'long' : 'wrong';
+  });
+  const shown = $derived(autoCheck ? live : result);
+  const messages = {
+    match: copy.remember.match,
+    mismatch: copy.remember.mismatch,
+    wrong: copy.remember.live.wrong,
+    short: copy.remember.live.short,
+    long: copy.remember.live.long,
+  };
 
   function forget() {
     attempt = '';
@@ -48,12 +63,6 @@
   function retry() {
     forget();
     entry?.focus();
-  }
-
-  function skip() {
-    forget();
-    masked = true;
-    recoveryTitle?.focus();
   }
 
   async function clear() {
@@ -70,6 +79,10 @@
 
 {#if !phrase}
   <p class="intro" role="status">{copy.remember.cleared}</p>
+  <h2>{copy.remember.clearedTipsTitle}</h2>
+  <ul class="tips">
+    {#each copy.remember.clearedTips as tip (tip)}<li>{tip}</li>{/each}
+  </ul>
   <div class="footer">
     <button class="button primary" onclick={onanother}>{copy.remember.another}</button>
   </div>
@@ -126,9 +139,14 @@
           result = null;
         }}
         onkeydown={(e) => {
-          if (e.key === 'Enter' && attempt) check();
+          if (e.key === 'Enter' && attempt && !autoCheck) check();
         }}
       />
+      {#if attempt}
+        <button class="eye" aria-label={copy.remember.clearEntry} onmousedown={(e) => e.preventDefault()} onclick={retry}>
+          <Icon name="close" />
+        </button>
+      {/if}
       <!-- Pressing the eye keeps focus (and the phone keyboard) in the field. -->
       <button
         class="eye"
@@ -141,19 +159,25 @@
       </button>
     </div>
 
+    <label class="auto">
+      <input type="checkbox" bind:checked={autoCheck} onchange={() => (result = null)} />
+      {copy.remember.autoCheck}
+    </label>
+
     <div class="actions">
-      <button class="button primary" onclick={check} disabled={!attempt}>{copy.remember.check}</button>
+      <button class="button primary" onclick={check} disabled={!attempt || autoCheck}>{copy.remember.check}</button>
       {#if result === 'mismatch'}<button class="button secondary" onclick={retry}>{copy.remember.retry}</button>{/if}
-      <button class="button secondary" onclick={skip}>{copy.remember.skip}</button>
     </div>
-    <p class="result {result}" role="status">
-      {result === 'match' ? copy.remember.match : result === 'mismatch' ? copy.remember.mismatch : ''}
+    <!-- Red and green (approved 2026-11-05 for practice), always with an icon so colour is not the only signal. -->
+    <p class="result {shown}" role="status" data-testid="practice-result">
+      {#if shown === 'match'}<Icon name="check" size={20} />{:else if shown && shown !== 'short'}<Icon name="close" size={20} />{/if}
+      {shown ? messages[shown] : ''}
     </p>
     <p class="help">{copy.remember.practiceLimits}</p>
   </section>
 
   <section class="recovery" aria-labelledby="recovery-title">
-    <h2 id="recovery-title" tabindex="-1" bind:this={recoveryTitle}>{copy.remember.recoveryTitle}</h2>
+    <h2 id="recovery-title">{copy.remember.recoveryTitle}</h2>
     <ul class="tips">
       {#each copy.remember.recovery as line (line)}<li>{line}</li>{/each}
     </ul>
@@ -349,16 +373,33 @@
     gap: 0.6rem;
     margin-top: 0.8rem;
   }
+  .auto {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.7rem;
+    cursor: pointer;
+  }
+  .auto input {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--navy-900);
+  }
   .result {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     margin: 0.6rem 0 0;
     min-height: 1.5em; /* reserved, so the page does not jump when the result appears */
     font-weight: 700;
   }
   .result.match {
-    color: var(--ink);
+    color: var(--green);
   }
-  .result.mismatch {
-    color: var(--ink-soft);
+  .result.mismatch,
+  .result.wrong,
+  .result.long {
+    color: var(--red);
   }
 
   .footer {

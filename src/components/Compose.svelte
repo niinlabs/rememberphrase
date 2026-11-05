@@ -4,24 +4,29 @@
   import type { Status } from '../core/status';
   import {
     canCombine,
+    canRemoveWord,
     canSplit,
     combine,
     CONNECTORS,
     drawFrom,
+    drawsInPhrase,
     edit,
     generate,
     hasEdits,
     insertConnector,
+    insertOwn,
     intactRandomWords,
     move,
     origin,
     phraseText,
-    removeConnector,
+    removeAdded,
+    removeWord,
     reset,
     SEPARATORS,
     setSeparator,
     split,
     wordError,
+    wordLimit,
     type Connector,
     type Phrase,
     type Separator,
@@ -79,15 +84,46 @@
     return () => (document.documentElement.style.scrollPaddingTop = '');
   });
   let pointerStart = { x: 0, y: 0, moved: false };
+  let pointer = $state({ x: 0, y: 0 });
+  let ghost = $state<HTMLElement>();
+  let removing = $state<Token | null>(null); // a word waiting for the remove confirmation
+
+  // While dragging, the other tiles make room live: CSS order shows the drop result without moving DOM
+  // nodes, which would release the pointer capture mid-drag. A copy of the word follows the pointer.
+  const draggedId = $derived(dragging?.kind === 'token' ? dragging.id : null);
+  const dragOrder = $derived.by(() => {
+    if (!dragging || dropAt === null) return null;
+    const ids = phrase.tokens.map((t) => t.id).filter((id) => id !== draggedId);
+    ids.splice(dropAt, 0, draggedId ?? 'new-connector');
+    return new Map(ids.map((id, i) => [id, i]));
+  });
+  const ghostText = $derived(dragging?.kind === 'connector' ? dragging.text : phrase.tokens.find((t) => t.id === draggedId)?.text);
+  $effect(() => {
+    if (!ghost) return;
+    ghost.style.left = `${pointer.x}px`;
+    ghost.style.top = `${pointer.y}px`;
+  });
 
   const text = $derived(phraseText(phrase));
   const intact = $derived(intactRandomWords(phrase));
   const connectorCount = $derived(phrase.tokens.filter((t) => t.kind === 'connector').length);
+  const ownCount = $derived(phrase.tokens.filter((t) => t.kind === 'own').length);
+  let ownDraft = $state('');
+  let ownError = $state<WordError | null>(null);
+
+  // Your own word goes in at the end; from there it moves like any tile and never counts as random.
+  function addOwn() {
+    ownError = wordError(ownDraft);
+    if (ownError) return;
+    phrase = insertOwn(phrase, ownDraft, phrase.tokens.length);
+    announcement = copy.compose.ownAdded(ownDraft);
+    ownDraft = '';
+  }
   const guidance = $derived(guidanceFor(intact));
   const separators = Object.keys(SEPARATORS) as Separator[];
   const sameItem = (a: Item | null, b: Item) =>
     !!a && a.kind === b.kind && (a.kind === 'token' ? a.id === (b as typeof a).id : a.text === (b as typeof a).text);
-  const isLocked = (t: Token) => t.kind === 'word' && t.slots.some((id) => phrase.slots.find((s) => s.id === id)?.locked);
+  const drawn = $derived(drawsInPhrase(phrase));
   const indexOf = (id: string) => phrase.tokens.findIndex((t) => t.id === id);
 
   async function place(item: Item, at: number) {
@@ -104,10 +140,14 @@
     list.querySelector<HTMLElement>(`[data-handle="${item.id}"]`)?.focus();
   }
 
-  // Where a pointer at (x, y) would insert: the number of tiles before it in reading order.
+  // Where a pointer at (x, y) would insert: the number of other tiles before it in reading order. Over the
+  // placeholder itself nothing changes, so the tiles that move to make room cannot flip the answer back.
   function indexAt(x: number, y: number) {
+    const holder = list.querySelector<HTMLElement>(':scope > li.placeholder')?.getBoundingClientRect();
+    if (holder && x >= holder.left && x <= holder.right && y >= holder.top && y <= holder.bottom) return dropAt;
     let i = 0;
-    for (const el of list.querySelectorAll<HTMLElement>(':scope > li.token')) {
+    for (const el of list.querySelectorAll<HTMLElement>(':scope > li.token:not(.placeholder)')) {
+      if (el.dataset.id === draggedId) continue;
       const r = el.getBoundingClientRect();
       if (r.bottom < y || (r.top <= y && r.left + r.width / 2 < x)) i++;
     }
@@ -125,6 +165,7 @@
     if (!dragging) return;
     if (!pointerStart.moved && Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y) < 6) return;
     pointerStart.moved = true;
+    pointer = { x: e.clientX, y: e.clientY };
     dropAt = indexAt(e.clientX, e.clientY);
   }
 
@@ -135,8 +176,9 @@
     dragging = null;
     dropAt = null;
     if (!item) return;
-    if (pointerStart.moved && at !== null) place(item, at);
-    else placing = sameItem(placing, item) ? null : item;
+    if (!pointerStart.moved || at === null) placing = sameItem(placing, item) ? null : item;
+    else if (item.kind === 'connector') place(item, at);
+    else place(item, at >= indexOf(item.id) ? at + 1 : at); // at is the final position; place takes a gap
   }
 
   function cancelDrag() {
@@ -161,7 +203,7 @@
 
   function onInput(e: Event, id: string) {
     const value = (e.currentTarget as HTMLInputElement).value;
-    const error = wordError(value);
+    const error = wordError(value, wordLimit(phrase.tokens[indexOf(id)]));
     if (error) {
       errors = { ...errors, [id]: error };
       return;
@@ -224,9 +266,9 @@
 <section class="preview" aria-labelledby="preview-title" bind:this={previewBox}>
   <h2 id="preview-title">{copy.compose.previewLabel}</h2>
   <p class="phrase" data-testid="phrase-preview">{text}</p>
-  <p class="counts">{copy.compose.counts(intact, phrase.slots.length, connectorCount, [...text].length)}</p>
+  <p class="counts">{copy.compose.counts(intact, drawn, connectorCount, [...text].length, ownCount)}</p>
   <p class="guidance">{guidance}</p>
-  {#if intact < phrase.slots.length}<p class="note">{copy.compose.editedNote}</p>{/if}
+  {#if intact < drawn}<p class="note">{copy.compose.editedNote}</p>{/if}
   {#if /[^\x20-\x7e]/.test(text)}<p class="note warn">{copy.compose.keyboardNote}</p>{/if}
 </section>
 <fieldset class="separators">
@@ -256,7 +298,7 @@
   </p>
 {/if}
 
-<ol class="tokens" class:drop-end={dropAt === phrase.tokens.length} bind:this={list} aria-label={copy.compose.tilesLabel}>
+<ol class="tokens" bind:this={list} aria-label={copy.compose.tilesLabel}>
   {#each phrase.tokens as token, i (token.id + ':' + version)}
     {@const o = origin(phrase, token)}
     {@const item: Item = { kind: 'token', id: token.id }}
@@ -267,8 +309,9 @@
       class="token {token.kind} origin-{o}"
       class:wide={[...token.text].length > 10}
       class:selected={sameItem(placing, item)}
-      class:dragging={sameItem(dragging, item) && dropAt !== null}
-      class:drop-before={dropAt === i}
+      class:placeholder={dragOrder !== null && token.id === draggedId}
+      style:order={dragOrder?.get(token.id)}
+      data-id={token.id}
     >
       <div class="head">
         <button
@@ -287,8 +330,10 @@
           <Icon name="grip" size={20} />
         </button>
         <span class="origin">{copy.compose.origin[o]}</span>
-        {#if isLocked(token)}
-          <span class="locked"><Icon name="lock" size={16} /><span class="visually-hidden">{copy.compose.lockedNote}</span></span>
+        {#if token.kind === 'word' && canRemoveWord(phrase)}
+          <button class="remove-word" aria-label={copy.compose.remove(token.text)} onclick={() => (removing = token)}>
+            <Icon name="close" size={16} />
+          </button>
         {/if}
       </div>
 
@@ -300,6 +345,7 @@
           aria-describedby={errors[token.id] ? `err-${token.id}` : undefined}
           autocomplete="off"
           autocapitalize="off"
+          autocorrect="off"
           spellcheck="false"
           oninput={(e) => onInput(e, token.id)}
         />
@@ -309,16 +355,36 @@
             <button class="small" aria-label="{copy.compose.split}: {token.text}" onclick={() => change(split(phrase, token.id))}>
               {copy.compose.split}
             </button>
-          {:else if canCombine(phrase, token.id)}
+          {/if}
+          {#if canCombine(phrase, token.id)}
             <button class="small" aria-label="{copy.compose.join}: {token.text}" onclick={() => change(combine(phrase, token.id))}>
               {copy.compose.join}
             </button>
           {/if}
         </div>
+      {:else if token.kind === 'own'}
+        <input
+          value={token.text}
+          aria-label="{copy.compose.wordLabel(i + 1)}, {copy.compose.origin[o]}"
+          aria-invalid={errors[token.id] ? 'true' : undefined}
+          aria-describedby={errors[token.id] ? `err-${token.id}` : undefined}
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          oninput={(e) => onInput(e, token.id)}
+        />
+        {#if errors[token.id]}<p class="error" id="err-{token.id}">{copy.compose.wordErrors[errors[token.id]]}</p>{/if}
+        <div class="actions">
+          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeAdded(phrase, token.id))}>
+            <Icon name="close" size={16} />
+            {copy.compose.remove('')}
+          </button>
+        </div>
       {:else}
         <span class="connector-text">{token.text}</span>
         <div class="actions">
-          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeConnector(phrase, token.id))}>
+          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeAdded(phrase, token.id))}>
             <Icon name="close" size={16} />
             {copy.compose.remove('')}
           </button>
@@ -331,7 +397,13 @@
       <button onclick={() => place(placing!, phrase.tokens.length)}>{gapLabel(phrase.tokens.length)}</button>
     </li>
   {/if}
+  {#if dragOrder && dragging?.kind === 'connector'}
+    <li class="token connector placeholder" style:order={dragOrder.get('new-connector')} aria-hidden="true">
+      <span class="connector-text">{dragging.text}</span>
+    </li>
+  {/if}
 </ol>
+{#if dragOrder}<div class="ghost" bind:this={ghost} aria-hidden="true">{ghostText}</div>{/if}
 <p class="visually-hidden" aria-live="polite">{announcement}</p>
 
 <section class="tray" aria-labelledby="tray-title">
@@ -356,6 +428,24 @@
     {/each}
   </ul>
   <p id="tray-help">{copy.compose.connectorsHelp}</p>
+  <div class="own-add">
+    <label for="own-word">{copy.compose.ownLabel}</label>
+    <input
+      id="own-word"
+      bind:value={ownDraft}
+      aria-describedby="own-help{ownError ? ' own-error' : ''}"
+      aria-invalid={ownError ? 'true' : undefined}
+      autocomplete="off"
+      autocapitalize="off"
+      autocorrect="off"
+      spellcheck="false"
+      oninput={() => (ownError = null)}
+      onkeydown={(e) => e.key === 'Enter' && addOwn()}
+    />
+    <button class="small" onclick={addOwn} disabled={!ownDraft}>{copy.compose.ownAdd}</button>
+  </div>
+  {#if ownError}<p class="error" id="own-error">{copy.compose.wordErrors[ownError]}</p>{/if}
+  <p id="own-help">{copy.compose.ownHelp}</p>
 </section>
 
 <div class="footer">
@@ -373,6 +463,20 @@
     <Icon name="forward" />
   </button>
 </div>
+
+<WarnDialog
+  open={removing !== null}
+  title={removing ? copy.warn.removeTitle(removing.text) : ''}
+  body={copy.warn.removeBody}
+  confirmLabel={copy.warn.removeConfirm}
+  onconfirm={() => {
+    const { [removing!.id]: _, ...rest } = errors;
+    errors = rest;
+    change(removeWord(phrase, removing!.id));
+    removing = null;
+  }}
+  oncancel={() => (removing = null)}
+/>
 
 <WarnDialog
   open={freshOpen}
@@ -452,6 +556,11 @@
     border-style: dashed;
     background: #f1f3f8;
   }
+  .token.own {
+    border-style: dotted;
+    border-width: 2px;
+    background: var(--paper);
+  }
   .token.origin-edited,
   .token.origin-rewritten {
     background: var(--paper);
@@ -459,14 +568,30 @@
   .token.selected {
     border: 2px solid var(--navy-900);
   }
-  .token.dragging {
-    opacity: 0.45;
+  /* Where the dragged word will land: an empty outline the other tiles make room for. */
+  .token.placeholder {
+    border: 2px dashed var(--navy-700);
+    background: var(--paper);
   }
-  .token.drop-before {
-    box-shadow: -6px 0 0 -2px var(--yellow-deep);
+  .token.placeholder > * {
+    visibility: hidden;
   }
-  .tokens.drop-end {
-    box-shadow: inset -4px 0 0 var(--yellow-deep);
+  .token.connector.placeholder > * {
+    visibility: visible;
+    opacity: 0.6;
+  }
+  .ghost {
+    position: fixed;
+    z-index: 10;
+    transform: translate(-50%, -130%);
+    padding: 0.45rem 0.85rem;
+    border-radius: 12px;
+    background: var(--navy-900);
+    color: #fff;
+    font-weight: 750;
+    box-shadow: 0 12px 24px -10px rgb(3 8 24 / 0.7);
+    pointer-events: none;
+    white-space: nowrap;
   }
   .head {
     display: flex;
@@ -501,10 +626,22 @@
     text-decoration: underline 2px var(--yellow-deep);
     text-underline-offset: 3px;
   }
-  .locked {
+  .remove-word {
     display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
     margin-left: auto;
-    color: var(--navy-900);
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .remove-word:hover {
+    background: var(--paper);
+    color: var(--ink);
   }
   input {
     width: 100%;
@@ -592,6 +729,26 @@
     border-style: solid;
     background: var(--navy-900);
     color: #fff;
+  }
+  .own-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+  }
+  .own-add label {
+    font-weight: 700;
+  }
+  .own-add input {
+    flex: 1 1 10rem;
+    min-width: 0;
+    min-height: 2.5rem;
+    padding: 0 0.6rem;
+    border: 2px solid var(--cream-line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 1rem;
   }
   .tray p {
     margin: 0.4rem 0 0;

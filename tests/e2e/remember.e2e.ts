@@ -99,12 +99,10 @@ test('Try again clears the attempt and returns to the field', async ({ page, con
   await expect(result(page)).toHaveText('');
 });
 
-test('Skip practice clears the attempt and moves on to the recovery copy', async ({ page, context }) => {
+test('there is no Skip practice button: practice is optional and recovery is always on the page', async ({ page, context }) => {
   await reachRemember(page, context);
-  await entry(page).fill('half typed');
-  await page.getByRole('button', { name: copy.remember.skip }).click();
-  await expect(entry(page)).toHaveValue('');
-  await expect(page.getByRole('heading', { name: copy.remember.recoveryTitle })).toBeFocused();
+  await expect(page.getByRole('button', { name: /skip/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: copy.remember.recoveryTitle })).toBeVisible();
 });
 
 test('practice compares against the final phrase after edits, connecting words and separators', async ({ page, context }) => {
@@ -297,6 +295,49 @@ test('every change in Make it Yours or Generate reaches the counts, the login ch
   await page.getByRole('button', { name: copy.generate.newWords }).click(); // no edits left, so no warning
   await page.getByRole('button', { name: copy.generate.continue }).click();
   expect(await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })).not.toBe(seen[0]);
+});
+
+test('Check as I type says wrong, too short and too long as you go, in red and green, and disables Check', async ({ page, context }) => {
+  const phrase = await reachRemember(page, context);
+  const live = page.getByTestId('practice-result');
+  await page.getByLabel(copy.remember.autoCheck).check();
+  await expect(page.getByRole('button', { name: copy.remember.check, exact: true })).toBeDisabled();
+  await entry(page).fill(phrase.slice(0, 3));
+  await expect(live).toHaveText(copy.remember.live.short);
+  await entry(page).fill(`${phrase.slice(0, 3)}#`);
+  await expect(live).toHaveText(copy.remember.live.wrong);
+  await expect(live).toHaveClass(/wrong/);
+  await entry(page).fill(phrase);
+  await expect(live).toHaveText(copy.remember.match);
+  await expect(live).toHaveCSS('color', 'rgb(30, 111, 55)'); // --green
+  await expect(live.locator('svg')).toHaveCount(1); // never colour alone
+  await entry(page).fill(`${phrase}x`);
+  await expect(live).toHaveText(copy.remember.live.long);
+  await expect(live).toHaveCSS('color', 'rgb(180, 35, 24)'); // --red
+  await expect(page.getByTestId('reference-phrase')).toHaveCount(0); // live checking never reveals the phrase
+
+  await page.getByLabel(copy.remember.autoCheck).uncheck();
+  await expect(live).toHaveText('');
+  await entry(page).press('Enter');
+  await expect(live).toHaveText(copy.remember.mismatch);
+  await expect(live).toHaveCSS('color', 'rgb(180, 35, 24)');
+});
+
+test('the clear icon empties the field and keeps focus in it', async ({ page, context }) => {
+  await reachRemember(page, context);
+  await expect(page.getByRole('button', { name: copy.remember.clearEntry })).toHaveCount(0);
+  await entry(page).fill('some text');
+  await page.getByRole('button', { name: copy.remember.clearEntry }).click();
+  await expect(entry(page)).toHaveValue('');
+  await expect(entry(page)).toBeFocused();
+});
+
+test('after Clear phrase, the page explains how to remove what the browser may keep', async ({ page, context }) => {
+  await reachRemember(page, context);
+  await page.getByRole('button', { name: copy.remember.clear }).click();
+  await page.getByRole('alertdialog', { name: copy.warn.clearTitle }).getByRole('button', { name: copy.warn.clearConfirm }).click();
+  await expect(page.getByRole('heading', { name: copy.remember.clearedTipsTitle })).toBeVisible();
+  for (const tip of copy.remember.clearedTips) await expect(page.getByText(tip)).toBeVisible();
 });
 
 test('practising makes no requests, stores nothing and has no form; narrow screens work and pass accessibility checks', async ({ page, context }) => {

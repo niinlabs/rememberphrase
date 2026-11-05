@@ -16,6 +16,7 @@
   import { NO_RULES, type Rules } from './core/policy';
   import Icon from './components/Icon.svelte';
   import StatusBand from './components/StatusBand.svelte';
+  import WarnDialog from './components/WarnDialog.svelte';
 
   let languageCode = $state(languages[0].code);
   let words = $state<string[] | null>(null);
@@ -28,12 +29,16 @@
   let localCheckFailed = $state(false);
   let browserOnline = $state(navigator.onLine);
   let reconnected = $state(false);
+  // D7 as amended 2026-11-05: a deliberate, confirmed choice from red, for this phrase only.
+  let continuedConnected = $state(false);
+  let connectedOpen = $state(false);
   let alertOpen = $state(false);
   let step = $state<'landing' | 'prepare' | 'generate' | 'compose' | 'remember'>('landing');
   // The phrase lives here so moving between steps never loses it (volatile tab state only).
   let phrase = $state<Phrase | null>(null);
   let rules = $state<Rules>(NO_RULES); // login requirements the user stated (D9), volatile like the phrase
   let confirmBox = $state<HTMLInputElement>();
+  let homeOpen = $state(false);
 
   const language = $derived(languages.find((l) => l.code === languageCode)!);
   const readiness: Readiness = $derived({
@@ -45,6 +50,7 @@
     localCheckFailed,
     browserOnline,
     reconnected,
+    continuedConnected,
   });
   const status = $derived(connectionStatus(readiness));
   const stage = $derived(words === null ? 'fetch' : status.canGenerate ? 'ready' : 'offline');
@@ -52,7 +58,9 @@
   const order = ['fetch', 'offline'] as const;
   const chip = $derived(
     status.colour === 'red'
-      ? copy.chip.red
+      ? status.canGenerate
+        ? copy.chip.continued
+        : copy.chip.red
       : status.colour === 'green'
         ? copy.chip.green
         : status.canGenerate
@@ -77,6 +85,7 @@
   }
 
   async function confirmOffline() {
+    continuedConnected = false; // confirming offline again is the honest path, so it replaces the choice
     reconnected = false;
     localCheckOk = false;
     localCheckFailed = false;
@@ -123,7 +132,7 @@
 
   function online() {
     browserOnline = true;
-    if (probe === null) return;
+    if (probe === null || continuedConnected) return; // already chose to work while connected
     // Confirmation starts when the check starts, so a reconnection during the check also holds (D7 row 2).
     reconnected = true;
     localCheckOk = false;
@@ -139,6 +148,29 @@
     step = 'prepare';
     await tick();
     confirmBox?.focus();
+  }
+
+  // The logo leads back to the introduction. With a phrase in progress that means starting over, so it
+  // asks first; the word list and the offline check stay, so a new phrase needs no new download.
+  function goHome() {
+    if (step === 'landing') return;
+    if (phrase) homeOpen = true;
+    else goTo('landing');
+  }
+
+  async function continueConnected() {
+    connectedOpen = false;
+    continuedConnected = true;
+    if (canRunLocalCheck(readiness)) localCheck();
+    await advanceWhenReady();
+  }
+
+  function startOver() {
+    homeOpen = false;
+    continuedConnected = false;
+    phrase = null;
+    rules = NO_RULES;
+    goTo('landing');
   }
 
   async function goTo(next: typeof step) {
@@ -158,7 +190,9 @@
 <div class="canvas">
   <header class="masthead">
     <div class="brand">
-      <p class="wordmark"><img src={logo} alt="Rememberphrase" width="640" height="96" /></p>
+      <button class="wordmark" onclick={goHome}>
+        <img src={logo} alt="Rememberphrase" width="640" height="96" /><span class="visually-hidden">, {copy.home}</span>
+      </button>
       <p class="tagline">{copy.tagline}</p>
     </div>
     <!-- Nothing about the connection is known or relevant until Step 1 starts. -->
@@ -215,6 +249,7 @@
           {rules}
           onback={() => goTo('compose')}
           onclear={() => {
+            continuedConnected = false; // the choice covered this phrase only
             phrase = null;
             rules = NO_RULES;
           }}
@@ -259,6 +294,9 @@
                 </ul>
                 <p class="meta">{copy.offline.check}</p>
                 <StatusBand {status} />
+                {#if status.colour === 'red' && !status.canGenerate}
+                  <button class="link continue-link" onclick={() => (connectedOpen = true)}>{copy.offline.continueLink}</button>
+                {/if}
                 {#if status.colour === 'amber' && !status.canGenerate && status.reason === 'local-check-failed'}
                   <button class="button primary" onclick={retryLocalCheck}>{copy.offline.retryCheck}</button>
                 {/if}
@@ -278,7 +316,9 @@
                   </button>
                 </div>
               {:else if pos === 'done'}
-                <p class="summary">{probe === 'skipped' ? copy.offline.skipped : copy.offline.noAnswer}</p>
+                <p class="summary">
+                  {continuedConnected ? copy.offline.continued : probe === 'skipped' ? copy.offline.skipped : copy.offline.noAnswer}
+                </p>
               {/if}
             </div>
           </li>
@@ -300,10 +340,47 @@
       {#each panel.body as line (line)}<p>{line}</p>{/each}
       <hr />
       <p class="small">{copy.panel.noStorage}</p>
-      <p class="small">{copy.panel.attribution}</p>
+      <p class="small">
+        {copy.panel.attribution.before}<a href="https://www.eff.org/" target="_blank" rel="noopener noreferrer"
+          >{copy.panel.attribution.link}<span class="visually-hidden"> {copy.footer.newTab}</span></a
+        >{copy.panel.attribution.after}
+      </p>
     </aside>
   </main>
+
+  <footer class="site-footer">
+    <p>
+      {copy.footer.sponsored}
+      <a href="https://shifteverywhere.com" target="_blank" rel="noopener noreferrer"
+        >{copy.footer.sponsor}<span class="visually-hidden"> {copy.footer.newTab}</span></a
+      >
+      · {copy.footer.developed}
+      <a href="https://github.com/niinlabs/rememberphrase" target="_blank" rel="noopener noreferrer"
+        >{copy.footer.developer}<span class="visually-hidden"> {copy.footer.newTab}</span></a
+      >
+    </p>
+    <p>{copy.footer.licence}</p>
+  </footer>
 </div>
+
+<WarnDialog
+  open={connectedOpen}
+  title={copy.warn.connectedTitle}
+  body={copy.warn.connectedBody}
+  confirmLabel={copy.warn.connectedConfirm}
+  cancelLabel={copy.warn.connectedCancel}
+  onconfirm={continueConnected}
+  oncancel={() => (connectedOpen = false)}
+/>
+
+<WarnDialog
+  open={homeOpen}
+  title={copy.warn.homeTitle}
+  body={copy.warn.homeBody}
+  confirmLabel={copy.warn.homeConfirm}
+  onconfirm={startOver}
+  oncancel={() => (homeOpen = false)}
+/>
 
 <ConfirmDialog open={probe === 'pending'} onskip={() => skipper?.abort()} />
 <ConnectionAlert open={alertOpen} reason={alertText} onacknowledge={acknowledge} />
@@ -333,7 +410,13 @@
     outline-color: var(--yellow);
   }
   .wordmark {
+    display: block;
     margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
   }
   .wordmark img {
     display: block;
@@ -601,10 +684,46 @@
     border: none;
     border-top: 1px solid var(--cream-line);
   }
+  .panel .small a {
+    color: inherit;
+    text-underline-offset: 3px;
+  }
   .panel .small {
     font-size: 0.92rem;
   }
 
+  .continue-link {
+    display: block;
+    margin-top: 0.6rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  /* Links open in a new tab: following one here would close this tab's phrase. */
+  .site-footer {
+    max-width: 78rem;
+    margin: 1.5rem auto 0;
+    color: #c5cde0;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  .site-footer p {
+    margin: 0.3rem 0;
+  }
+  .site-footer a {
+    color: var(--yellow);
+    font-weight: 650;
+    text-underline-offset: 3px;
+  }
+  .site-footer :global(:focus-visible) {
+    outline-color: var(--yellow);
+  }
   .visually-hidden {
     position: absolute;
     width: 1px;

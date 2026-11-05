@@ -10,7 +10,9 @@
   const tone = $derived(status.colour === 'amber' ? (status.canGenerate ? 'caution' : 'pending') : status.colour);
   const label = $derived(
     status.colour === 'red'
-      ? copy.band.labels.red
+      ? status.canGenerate
+        ? copy.band.labels.continued
+        : copy.band.labels.red
       : status.colour === 'green'
         ? copy.band.labels.green
         : status.canGenerate

@@ -149,3 +149,47 @@ test('the landing says what the site is not, labels the examples and makes no re
   // Step 1 tells Mac users to turn off Wi-Fi and unplug cables, so the landing must not promise Airplane mode.
   expect(strings(copy.landing).concat(copy.panel.landing.body).join(' ')).not.toMatch(/airplane/i);
 });
+
+// Wording settled in Niclas's review of 2026-11-05.
+test('reviewed panel wording stays as agreed', () => {
+  expect(copy.panel.offline.body.join(' ')).toContain('one small test that tries to reach rememberphrase.com');
+  expect(copy.panel.compose.body.join(' ')).toContain("They don't necessarily add strength.");
+  expect(copy.panel.remember.body.join(' ')).toContain('try as much as you like'); // not "often": nothing is kept to come back to
+  expect(copy.panel.remember.body.join(' ')).toContain('until you have noted down a recovery copy'); // the site gives nothing
+});
+
+test('live practice feedback never states the phrase, and the cleared page says how to remove browser records', () => {
+  expect(Object.values(copy.remember.live)).toEqual(['Wrong passphrase', 'Too short, keep going', 'Too long']);
+  expect(copy.remember.clearedTips.join(' ')).toMatch(/saved passwords/);
+  expect(copy.remember.clearedTips.join(' ')).toMatch(/browsing history/);
+  expect(copy.remember.clearedTips.join(' ')).toMatch(/keyboard.*dictionary/);
+});
+
+test('continuing while connected names the risk plainly and never sounds like an all-clear', () => {
+  for (const text of [copy.band.continued, copy.warn.connectedBody]) {
+    expect(text).toContain("this page doesn't send them");
+    expect(text).toMatch(/tampered page or a browser extension could/);
+  }
+  expect(copy.warn.connectedBody).toContain('try again on a network you can switch off');
+  expect(copy.chip.continued).toBe('You chose to continue while connected');
+});
+
+test('wording from the review of 2026-11-05, second round', () => {
+  expect(copy.tagline).toBe('Random start. Your story. A passphrase you can remember.');
+  expect(copy.landing.edit.at(-1)).toBe(
+    'Editing, replacing or removing a word may make it less random. With fewer random words left, the phrase may be easier to guess.',
+  );
+  expect([...CONNECTORS]).toEqual([...CONNECTORS].sort());
+  expect(CONNECTORS).toContain('an');
+});
+
+test('hold messages ask to check the disconnection, not Airplane mode, which a Mac does not have', () => {
+  for (const reason of ['site-answered', 'network-answered', 'reconnected', 'browser-online'] as const) {
+    expect(copy.band[reason]).not.toMatch(/airplane/i);
+    expect(copy.band[reason]).toContain("check that you're disconnected");
+  }
+});
+
+test('the own-word help warns against things others could link to you', () => {
+  expect(copy.compose.ownHelp).toContain('Avoid anything others could link to you, such as names, birthdays or places.');
+});

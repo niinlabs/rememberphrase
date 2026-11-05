@@ -4,6 +4,9 @@ import {
   canReroll,
   canSplit,
   combine,
+  canRemoveWord,
+  drawsInPhrase,
+  removeWord,
   decorate,
   DEFAULT_WORDS,
   drawFrom,
@@ -12,11 +15,12 @@ import {
   generate,
   hasEdits,
   insertConnector,
+  insertOwn,
   intactRandomWords,
   move,
   origin,
   phraseText,
-  removeConnector,
+  removeAdded,
   reroll,
   reset,
   setCount,
@@ -175,13 +179,29 @@ describe('combining and splitting (D12)', () => {
     expect(p.slots).toEqual(six().slots); // draws and locks are untouched
   });
 
-  test('only two single generated words can combine', () => {
+  test('adjacent words join, never across a connector, after the last word or onto an edited join', () => {
     const withConnector = insertConnector(six(), 'and', 1);
     expect(canCombine(withConnector, 'w0')).toBe(false); // next token is a connector
-    expect(canCombine(combine(six(), 'w0'), 'w0+w1')).toBe(false); // already a combination
     expect(canCombine(six(), 'w5')).toBe(false); // nothing after the last word
-    const long = edit(edit(six(), 'w0', 'x'.repeat(20)), 'w1', 'y'.repeat(20));
-    expect(canCombine(long, 'w0')).toBe(false); // would exceed 32 characters
+    expect(canCombine(combine(six(), 'w0'), 'w0+w1')).toBe(true); // a join can grow (D12 as amended)
+    const editedJoin = edit(combine(six(), 'w0'), 'w0+w1', 'mapleORBIT');
+    expect(canCombine(editedJoin, 'w0+w1')).toBe(false); // its text no longer splits per draw
+  });
+
+  test('all six words join into one token that keeps six intact draws and splits back into six words', () => {
+    let p = six();
+    for (const id of ['w0', 'w0+w1', 'w0+w1+w2', 'w0+w1+w2+w3', 'w0+w1+w2+w3+w4']) p = combine(p, id);
+    expect(texts(p)).toEqual(['mapleorbitlanternvelvetstorkdelay']);
+    expect(intactRandomWords(p)).toBe(6);
+    expect(origin(p, p.tokens[0])).toBe('combined');
+    expect(split(p, p.tokens[0].id).tokens).toEqual(six().tokens);
+  });
+
+  test('a joined token may hold 32 characters per random word in it', () => {
+    const joined = combine(combine(six(), 'w0'), 'w0+w1'); // three draws
+    expect(() => edit(joined, 'w0+w1+w2', 'x'.repeat(96))).not.toThrow();
+    expect(() => edit(joined, 'w0+w1+w2', 'x'.repeat(97))).toThrow(RangeError);
+    expect(() => edit(six(), 'w0', 'x'.repeat(33))).toThrow(RangeError);
   });
 
   test('an unchanged combination splits back into the two original words without a new draw', () => {
@@ -242,8 +262,8 @@ describe('connectors, separators, reset and the exact string (D10, D11)', () => 
     p = move(p, 'c6', 0);
     expect(texts(p)[0]).toBe('with');
     expect(origin(p, p.tokens[0])).toBe('connector');
-    expect(() => removeConnector(p, 'w0')).toThrow(RangeError);
-    expect(texts(removeConnector(p, 'c6'))).toEqual(texts(six()));
+    expect(() => removeAdded(p, 'w0')).toThrow(RangeError);
+    expect(texts(removeAdded(p, 'c6'))).toEqual(texts(six()));
     expect(p.slots).toHaveLength(6);
   });
 
@@ -315,3 +335,54 @@ describe('decoration (D9 as clarified 2026-10-25)', () => {
     expect(() => decorate(six(), { capitalise: 'shout' as never })).toThrow(RangeError);
   });
 });
+
+describe('removing words and the Nothing separator (2026-11-05)', () => {
+  test('a removed word leaves the phrase and the counts; Reset brings it back; one word always stays', () => {
+    const p = removeWord(six(), 'w2');
+    expect(phraseText(p)).toBe('maple orbit velvet stork delay');
+    expect(drawsInPhrase(p)).toBe(5);
+    expect(intactRandomWords(p)).toBe(5);
+    expect(hasEdits(p)).toBe(true);
+    expect(phraseText(reset(p))).toBe('maple orbit lantern velvet stork delay');
+    let one = six();
+    for (const id of ['w1', 'w2', 'w3', 'w4', 'w5']) one = removeWord(one, id);
+    expect(canRemoveWord(one)).toBe(false);
+    expect(() => removeWord(one, 'w0')).toThrow(RangeError);
+    expect(() => removeWord(insertConnector(six(), 'and', 1), 'c6')).toThrow(RangeError); // connectors have their own remove
+  });
+
+  test('removing a joined word removes all of its draws', () => {
+    const p = removeWord(combine(six(), 'w0'), 'w0+w1');
+    expect(drawsInPhrase(p)).toBe(4);
+    expect(intactRandomWords(p)).toBe(4);
+  });
+
+  test('Nothing joins the whole phrase without separators', () => {
+    expect(phraseText(setSeparator(six(), 'none'))).toBe('mapleorbitlanternvelvetstorkdelay');
+  });
+});
+
+describe('your own words (D11 as amended 2026-11-05)', () => {
+  test('an own word goes where it is put, can be edited and removed, and never counts as random', () => {
+    let p = insertOwn(six(), 'my 2nd!', 2);
+    expect(phraseText(p)).toBe('maple orbit my 2nd! lantern velvet stork delay');
+    expect(intactRandomWords(p)).toBe(6);
+    expect(drawsInPhrase(p)).toBe(6);
+    expect(origin(p, p.tokens[2])).toBe('own');
+    p = edit(p, 'o6', 'Café');
+    expect(p.tokens[2].text).toBe('Café');
+    expect(intactRandomWords(p)).toBe(6);
+    expect(phraseText(removeAdded(p, 'o6'))).toBe(phraseText(six()));
+  });
+
+  test('own words follow the word rules, never join, and Reset removes them', () => {
+    for (const bad of ['', ' lead', 'x'.repeat(33), 'a\tb']) expect(() => insertOwn(six(), bad, 0), bad).toThrow(RangeError);
+    const p = insertOwn(six(), 'zebra', 1);
+    expect(canCombine(p, 'w0')).toBe(false); // the next tile is your own word
+    expect(canCombine(p, 'o6')).toBe(false);
+    expect(hasEdits(p)).toBe(true);
+    expect(phraseText(reset(p))).toBe(phraseText(six()));
+    expect(() => removeAdded(six(), 'w0')).toThrow(RangeError); // random words go through removeWord
+  });
+});
+

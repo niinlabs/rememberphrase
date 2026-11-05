@@ -8,9 +8,18 @@
     confirmLabel,
     onconfirm,
     oncancel,
-  }: { open: boolean; title: string; body: string; confirmLabel: string; onconfirm: () => void; oncancel: () => void } =
-    $props();
+    cancelLabel = copy.warn.cancel,
+  }: {
+    open: boolean;
+    title: string;
+    body: string;
+    confirmLabel: string;
+    onconfirm: () => void;
+    oncancel: () => void;
+    cancelLabel?: string;
+  } = $props();
   let dialog: HTMLDialogElement;
+  const uid = $props.id(); // a screen may hold several warnings, so their title and body ids must differ
 
   $effect(() => {
     if (open && !dialog.open) dialog.showModal();
@@ -22,18 +31,18 @@
 <dialog
   bind:this={dialog}
   role="alertdialog"
-  aria-labelledby="warn-title"
-  aria-describedby="warn-body"
+  aria-labelledby="{uid}-title"
+  aria-describedby="{uid}-body"
   oncancel={(e) => {
     e.preventDefault();
     oncancel();
   }}
 >
-  <h2 id="warn-title">{title}</h2>
-  <p id="warn-body">{body}</p>
+  <h2 id="{uid}-title">{title}</h2>
+  <p id="{uid}-body">{body}</p>
   <div class="buttons">
     <!-- svelte-ignore a11y_autofocus -->
-    <button class="button secondary" onclick={oncancel} autofocus>{copy.warn.cancel}</button>
+    <button class="button secondary" onclick={oncancel} autofocus>{cancelLabel}</button>
     <button class="button primary" onclick={onconfirm}>{confirmLabel}</button>
   </div>
 </dialog>

@@ -7,8 +7,12 @@ export const MIN_WORDS = 4;
 export const MAX_WORDS = 12;
 export const DEFAULT_WORDS = 6;
 export const MAX_WORD_LENGTH = 32;
-export const CONNECTORS = ['the', 'a', 'and', 'in', 'on', 'with', 'for', 'of', 'to', 'at', 'under', 'near'] as const;
-export const SEPARATORS = { space: ' ', hyphen: '-', period: '.', underscore: '_' } as const;
+// D11 as amended 2026-11-05: the reviewed list plus common transition words, in alphabetical order.
+export const CONNECTORS = [
+  'a', 'after', 'an', 'and', 'at', 'before', 'but', 'by', 'for', 'from', 'in', 'into',
+  'near', 'of', 'on', 'or', 'over', 'so', 'the', 'then', 'to', 'under', 'with',
+] as const;
+export const SEPARATORS = { space: ' ', hyphen: '-', period: '.', underscore: '_', none: '' } as const;
 // D9 decoration: symbols every common keyboard layout has, and the capitalisation choices.
 export const DECORATION_SYMBOLS = ['!', '?', '#', '*', '.', '-'] as const;
 export const CAPITALISE = ['none', 'first', 'every'] as const;
@@ -26,11 +30,13 @@ export type Slot = { id: number; word: string; locked: boolean };
 // A joined word keeps each part's text as it was when joined, so it can be split back exactly.
 export type Token =
   | { kind: 'word'; id: string; slots: number[]; text: string; parts?: string[] }
-  | { kind: 'connector'; id: string; text: Connector };
+  | { kind: 'connector'; id: string; text: Connector }
+  // D11 as amended 2026-11-05: free text the user adds; like a connector it is never a random draw.
+  | { kind: 'own'; id: string; text: string };
 // slots in generated order are the reset baseline; tokens and separator are the step-3 draft.
 export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; decoration: Decoration; nextId: number };
 
-export type Origin = 'unchanged' | 'combined' | 'edited' | 'rewritten' | 'connector';
+export type Origin = 'unchanged' | 'combined' | 'edited' | 'rewritten' | 'connector' | 'own';
 export type WordError = 'empty' | 'too-long' | 'control' | 'edge-space';
 
 export const drawFrom =
@@ -129,11 +135,14 @@ export function move(p: Phrase, tokenId: string, to: number): Phrase {
   return { ...p, tokens };
 }
 
-// D10: 1–32 characters, no line breaks, tabs or control characters, no leading or trailing space.
-export function wordError(text: string): WordError | null {
+// D10: 1–32 characters per random word in the token (as amended 2026-11-05, so a token joined from N
+// words may have 32 × N), no line breaks, tabs or control characters, no leading or trailing space.
+export const wordLimit = (token: Token) => MAX_WORD_LENGTH * (token.kind === 'word' ? token.slots.length : 1);
+
+export function wordError(text: string, limit = MAX_WORD_LENGTH): WordError | null {
   const t = text.normalize('NFC');
   if (t.length === 0) return 'empty';
-  if ([...t].length > MAX_WORD_LENGTH) return 'too-long';
+  if ([...t].length > limit) return 'too-long';
   if (/\p{Cc}/u.test(t)) return 'control';
   if (/^\s|\s$/u.test(t)) return 'edge-space';
   return null;
@@ -141,8 +150,9 @@ export function wordError(text: string): WordError | null {
 
 export function edit(p: Phrase, tokenId: string, text: string): Phrase {
   const token = p.tokens[indexOf(p, tokenId)];
-  if (token.kind !== 'word') throw new RangeError('Only words can be edited');
-  if (wordError(text)) throw new RangeError(`Invalid word: ${wordError(text)}`);
+  if (token.kind === 'connector') throw new RangeError('Connecting words cannot be edited');
+  const error = wordError(text, wordLimit(token));
+  if (error) throw new RangeError(`Invalid word: ${error}`);
   const normalized = text.normalize('NFC');
   return { ...p, tokens: p.tokens.map((t) => (t.id === tokenId ? { ...token, text: normalized } : t)) };
 }
@@ -151,11 +161,16 @@ const slotWord = (p: Phrase, id: number) => p.slots.find((s) => s.id === id)!.wo
 export const originalText = (p: Phrase, token: Token) =>
   token.kind === 'word' ? token.slots.map((id) => slotWord(p, id)).join('') : token.text;
 
-// D12: two adjacent single generated words, never connectors or an existing combination.
+// D12 as amended 2026-11-05: any two adjacent words join, so a phrase can join up to one word. A join
+// that was edited since joining cannot join again: its text no longer splits into one part per draw.
+const joinable = (t: Token | undefined): t is Extract<Token, { kind: 'word' }> =>
+  t?.kind === 'word' && (!t.parts || t.text === t.parts.join(''));
+const partsOf = (t: Extract<Token, { kind: 'word' }>) => t.parts ?? [t.text];
+
 export function canCombine(p: Phrase, tokenId: string) {
   const i = indexOf(p, tokenId);
   const [a, b] = [p.tokens[i], p.tokens[i + 1]];
-  return a?.kind === 'word' && b?.kind === 'word' && a.slots.length === 1 && b.slots.length === 1 && !wordError(a.text + b.text);
+  return joinable(a) && joinable(b);
 }
 
 export function combine(p: Phrase, tokenId: string): Phrase {
@@ -167,12 +182,13 @@ export function combine(p: Phrase, tokenId: string): Phrase {
     id: `${a.id}+${b.id}`,
     slots: [...a.slots, ...b.slots],
     text: a.text + b.text,
-    parts: [a.text, b.text],
+    parts: [...partsOf(a), ...partsOf(b)],
   };
   return { ...p, tokens: [...p.tokens.slice(0, i), joined, ...p.tokens.slice(i + 2)] };
 }
 
-// D12: a combination can be split while its text is unchanged since joining; Reset is the way back after an edit.
+// D12: a join can be split back into its single words while its text is unchanged since joining; Reset is
+// the way back after an edit.
 export function canSplit(p: Phrase, tokenId: string) {
   const token = p.tokens[indexOf(p, tokenId)];
   return token.kind === 'word' && !!token.parts && token.text === token.parts.join('');
@@ -193,8 +209,29 @@ export function insertConnector(p: Phrase, text: Connector, at: number): Phrase 
   return { ...p, tokens, nextId: p.nextId + 1 };
 }
 
-export function removeConnector(p: Phrase, tokenId: string): Phrase {
-  if (p.tokens[indexOf(p, tokenId)].kind !== 'connector') throw new RangeError('Only connectors can be removed');
+// Your own word: any valid text (the same rules as an edited word), placed like a connector.
+export function insertOwn(p: Phrase, text: string, at: number): Phrase {
+  const error = wordError(text);
+  if (error) throw new RangeError(`Invalid word: ${error}`);
+  const tokens = [...p.tokens];
+  tokens.splice(Math.max(0, Math.min(at, tokens.length)), 0, { kind: 'own', id: `o${p.nextId}`, text: text.normalize('NFC') });
+  return { ...p, tokens, nextId: p.nextId + 1 };
+}
+
+// Removing a word takes its draws out of the phrase (Reset brings them back); one word always stays.
+export const canRemoveWord = (p: Phrase) => p.tokens.filter((t) => t.kind === 'word').length > 1;
+
+export function removeWord(p: Phrase, tokenId: string): Phrase {
+  if (p.tokens[indexOf(p, tokenId)].kind !== 'word' || !canRemoveWord(p)) throw new RangeError('This word cannot be removed');
+  return { ...p, tokens: p.tokens.filter((t) => t.id !== tokenId) };
+}
+
+// Random draws still in the phrase: removed words no longer count as drawn for it.
+export const drawsInPhrase = (p: Phrase) => p.tokens.reduce((n, t) => n + (t.kind === 'word' ? t.slots.length : 0), 0);
+
+// Connectors and your own words are removed directly; random words go through removeWord.
+export function removeAdded(p: Phrase, tokenId: string): Phrase {
+  if (p.tokens[indexOf(p, tokenId)].kind === 'word') throw new RangeError('Use removeWord for random words');
   return { ...p, tokens: p.tokens.filter((t) => t.id !== tokenId) };
 }
 
@@ -245,7 +282,7 @@ function intactDraws(p: Phrase, token: Token) {
 }
 
 export function origin(p: Phrase, token: Token): Origin {
-  if (token.kind === 'connector') return 'connector';
+  if (token.kind !== 'word') return token.kind;
   if (intactDraws(p, token) === token.slots.length) return token.parts ? 'combined' : 'unchanged';
   return stillRecognisable(token.text, originalText(p, token)) ? 'edited' : 'rewritten';
 }

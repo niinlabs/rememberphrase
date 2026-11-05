@@ -28,6 +28,7 @@
 
 <details class="requirements" bind:open>
   <summary>
+    <span class="chevron"><Icon name="forward" size={18} /></span>
     <span class="title">{copy.requirements.title}</span>
     <span class="status">{checks.length ? copy.requirements.summary(metCount, checks.length) : copy.requirements.notSpecified}</span>
   </summary>
@@ -116,6 +117,19 @@
   }
   .title {
     font-weight: 700;
+  }
+  .chevron {
+    display: flex;
+    align-self: center;
+    transition: transform 160ms;
+  }
+  .requirements[open] .chevron {
+    transform: rotate(90deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
   }
   .status {
     color: var(--ink-soft);

@@ -206,12 +206,12 @@ test('Start fresh warns, then draws a new set and returns to Generate', async ({
   expect(fresh).not.toEqual(words);
 });
 
-test('locks show on Make it Yours but do not stop editing', async ({ page, context }) => {
+test('locks from Generate are not shown on Make it Yours and do not stop editing', async ({ page, context }) => {
   const words = await reachCompose(page, context);
   await page.getByRole('button', { name: copy.compose.back }).click();
   await page.getByRole('button', { name: copy.generate.lock(3, words[2]) }).click();
   await page.getByRole('button', { name: copy.generate.continue }).click();
-  await expect(tiles(page).nth(2)).toContainText(copy.compose.lockedNote);
+  await expect(tiles(page).nth(2)).not.toContainText('Locked');
   await field(page, 3).fill(`${words[2]}!`);
   await expect(preview(page)).toContainText(`${words[2]}!`);
 });
@@ -339,6 +339,103 @@ test('wider screens never show the sticky phrase bar', async ({ page, context })
   await expect(page.getByTestId('sticky-phrase')).toBeHidden();
 });
 
+test('while dragging, a copy of the word follows the pointer and the other words make room live', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  const errors: string[] = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text())); // a CSP block would show here
+  const from = handle(page, words[0]);
+  const a = (await from.boundingBox())!;
+  const b = (await tiles(page).nth(3).boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 4, b.y + b.height / 2, { steps: 8 });
+
+  await expect(page.locator('.ghost')).toHaveText(words[0]);
+  await expect(page.locator('li.placeholder')).toHaveCount(1);
+  // On screen, the tiles now read in the order the drop would produce.
+  const boxes = await tiles(page).evaluateAll((els) =>
+    els.map((el) => ({ id: (el as HTMLElement).dataset.id, top: el.getBoundingClientRect().top, left: el.getBoundingClientRect().left })),
+  );
+  boxes.sort((p, q) => (Math.abs(p.top - q.top) > 4 ? p.top - q.top : p.left - q.left));
+  expect(boxes.map((x) => x.id)).toEqual(['w1', 'w2', 'w0', 'w3', 'w4', 'w5']);
+
+  await page.mouse.up();
+  await expect(page.locator('.ghost')).toHaveCount(0);
+  await expect(preview(page)).toHaveText([words[1], words[2], words[0], ...words.slice(3)].join(' '));
+  expect(errors).toEqual([]);
+});
+
+test('a word can be removed after a confirmation; Reset brings it back; the last word stays', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await page.getByRole('button', { name: copy.compose.remove(words[2]) }).click();
+  const warn = page.getByRole('alertdialog', { name: copy.warn.removeTitle(words[2]) });
+  await expect(warn.getByRole('button', { name: copy.warn.cancel })).toBeFocused();
+  await warn.getByRole('button', { name: copy.warn.cancel }).click();
+  await expect(preview(page)).toHaveText(words.join(' '));
+
+  await page.getByRole('button', { name: copy.compose.remove(words[2]) }).click();
+  await page.getByRole('alertdialog', { name: copy.warn.removeTitle(words[2]) }).getByRole('button', { name: copy.warn.removeConfirm }).click();
+  const five = words.filter((_, i) => i !== 2);
+  await expect(preview(page)).toHaveText(five.join(' '));
+  await expect(page.getByText(copy.compose.counts(5, 5, 0, five.join(' ').length))).toBeVisible();
+  await expect(page.getByText(copy.generate.guidance.short)).toBeVisible();
+
+  await page.getByRole('button', { name: copy.compose.reset }).click();
+  await expect(preview(page)).toHaveText(words.join(' '));
+
+  for (const w of words.slice(1)) {
+    await page.getByRole('button', { name: copy.compose.remove(w) }).click();
+    await page.getByRole('alertdialog', { name: copy.warn.removeTitle(w) }).getByRole('button', { name: copy.warn.removeConfirm }).click();
+  }
+  await expect(preview(page)).toHaveText(words[0]);
+  await expect(page.getByRole('button', { name: copy.compose.remove(words[0]) })).toHaveCount(0);
+});
+
+test('any number of words join into one, and Split separates them all again', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await page.getByRole('button', { name: `${copy.compose.join}: ${words[0]}` }).click();
+  await page.getByRole('button', { name: `${copy.compose.join}: ${words[0] + words[1]}` }).click();
+  const three = words[0] + words[1] + words[2];
+  await expect(preview(page)).toHaveText([three, ...words.slice(3)].join(' '));
+  await expect(page.getByText(copy.compose.counts(6, 6, 0, [three, ...words.slice(3)].join(' ').length))).toBeVisible();
+  await page.getByRole('button', { name: `${copy.compose.split}: ${three}` }).click();
+  await expect(preview(page)).toHaveText(words.join(' '));
+});
+
+test('Nothing between words joins the whole phrase, and the new connecting words are offered', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await page.getByRole('radio', { name: copy.compose.separators.none }).check();
+  await expect(preview(page)).toHaveText(words.join(''));
+  const tray = page.getByRole('region', { name: copy.compose.connectorsTitle });
+  for (const c of ['but', 'then', 'into', 'before']) await expect(tray.getByRole('button', { name: c, exact: true })).toBeVisible();
+});
+
+test('your own word is added at the end, moves and edits like a tile, and never counts as random', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  const own = page.getByLabel(copy.compose.ownLabel, { exact: true });
+  const add = page.getByRole('button', { name: copy.compose.ownAdd, exact: true });
+  await expect(add).toBeDisabled();
+  await own.fill(' x');
+  await add.click();
+  await expect(page.getByText(copy.compose.wordErrors['edge-space'])).toBeVisible();
+  await own.fill('my 2nd!');
+  await own.press('Enter');
+  await expect(own).toHaveValue('');
+  await expect(preview(page)).toHaveText([...words, 'my 2nd!'].join(' '));
+  const len = [...words, 'my 2nd!'].join(' ').length;
+  await expect(page.getByText(copy.compose.counts(6, 6, 0, len, 1))).toBeVisible();
+  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0); // nothing random was edited
+
+  await handle(page, 'my 2nd!').press('ArrowLeft');
+  await expect(preview(page)).toHaveText([...words.slice(0, 5), 'my 2nd!', words[5]].join(' '));
+  await field(page, 6).fill('our 3rd!');
+  await expect(preview(page)).toHaveText([...words.slice(0, 5), 'our 3rd!', words[5]].join(' '));
+  await expect(tiles(page).nth(5)).toContainText(copy.compose.origin.own);
+
+  await page.getByRole('button', { name: copy.compose.remove('our 3rd!') }).click();
+  await expect(preview(page)).toHaveText(words.join(' '));
+});
+
 test('composing makes no requests and stores nothing; narrow screens work and pass accessibility checks', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const words = await reachCompose(page, context);
@@ -349,6 +446,9 @@ test('composing makes no requests and stores nothing; narrow screens work and pa
   await page.getByRole('radio', { name: copy.compose.separators.period }).check();
   expect(requests).toEqual([]);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+  // Hints that ask the browser and keyboard not to keep, restore, correct or learn what is typed.
+  for (const [name, value] of [['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'], ['spellcheck', 'false']])
+    await expect(field(page, 2)).toHaveAttribute(name, value);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

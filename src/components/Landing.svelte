@@ -28,6 +28,10 @@
     {/each}
   </div>
   <p class="only"><strong>{copy.landing.examplesOnly}</strong> {copy.landing.examplesNote}</p>
+  <details class="notice">
+    <summary><span class="chevron"><Icon name="forward" size={18} /></span>{copy.landing.editTitle}</summary>
+    {#each copy.landing.edit as line (line)}<p>{line}</p>{/each}
+  </details>
 </section>
 
 <section aria-labelledby="next-title">
@@ -120,6 +124,37 @@
   .only {
     margin: 0.8rem 0 0;
     line-height: 1.5;
+  }
+
+  .notice {
+    margin-top: 0.9rem;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--cream-line);
+    border-radius: 16px;
+    background: var(--paper);
+  }
+  .notice summary {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .chevron {
+    display: flex;
+    transition: transform 160ms;
+  }
+  .notice[open] .chevron {
+    transform: rotate(90deg);
+  }
+  .notice p {
+    margin: 0.55rem 0 0;
+    line-height: 1.5;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
   }
 
   .next {

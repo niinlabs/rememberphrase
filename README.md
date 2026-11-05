@@ -1,20 +1,20 @@
 # Rememberphrase
 
-**Random words. Your story. A passphrase you can remember.**
+**Random start. Your story. A passphrase you can remember.**
 
 Rememberphrase is a guided web page for creating and learning one of the few passwords you need to remember, such as a password-manager master password or a computer login. It is not a password manager.
 
 ## Status
 
-Early development. Nothing in this repository is ready for use. Do not use it to create a real password.
+In final testing before the first public release. Manual, accessibility and release checks are recorded in [docs/evidence](docs/evidence).
 
-## How it will work
+## How it works
 
 1. Choose a language while online. Its word list loads into the open browser tab.
-2. Turn on Airplane mode and check that the page still works offline.
+2. Disconnect from every network (for example, turn on Airplane mode) and confirm it on the page.
 3. Generate 4–12 random words. Keep the ones you like and reroll the rest.
-4. Arrange and edit the words into a phrase you can picture, and check it against your login's requirements.
-5. Practise remembering it, and learn how password managers and two-factor authentication fit in.
+4. Arrange, join and edit the words into a phrase you can picture, add connecting words or your own, and check it against your login's requirements.
+5. Practise typing it, keep a recovery copy on paper, and learn how password managers and two-factor authentication fit in.
 
 ## Design requirements
 
@@ -24,7 +24,7 @@ Early development. Nothing in this repository is ready for use. Do not use it to
 - Strength guidance is based on how the words were generated. Reordering, edits and added characters are not counted as extra randomness.
 - The page cannot verify that your device is offline. It relies on your confirmation and says so.
 
-These requirements will be verified by automated and manual tests before any release.
+Automated tests check these requirements on every run; manual and release checks are recorded before release.
 
 ## Tech stack
 

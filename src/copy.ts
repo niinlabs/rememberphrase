@@ -1,6 +1,6 @@
 // User-facing copy for the Prepare step. Safety wording lives here so tests/unit/copy.test.ts can check it.
 export const copy = {
-  tagline: 'Random words. Your story. A passphrase you can remember.',
+  tagline: 'Random start. Your story. A passphrase you can remember.',
   steps: [
     { name: 'Prepare', hint: 'Get ready' },
     { name: 'Generate', hint: 'Get random words' },
@@ -27,6 +27,12 @@ export const copy = {
         words: ['snowman', 'banjo', 'igloo', 'mustard', 'walrus', 'rocket'],
         story: 'snowman with a banjo in the igloo near mustard walrus rocket',
       },
+    ],
+    editTitle: 'What happens if I change the words?',
+    edit: [
+      'The strength comes from the random words. Each is drawn from 7,776 words, so even someone who knows exactly how Rememberphrase works has to guess every one.',
+      "Moving words, joining them or adding small connecting words doesn't take that away, but it doesn't necessarily add to it either.",
+      'Editing, replacing or removing a word may make it less random. With fewer random words left, the phrase may be easier to guess.',
     ],
     examplesOnly: 'Examples only. Do not use these as passwords.',
     examplesNote:
@@ -76,6 +82,8 @@ export const copy = {
     noAnswer: 'Could not reach Rememberphrase. This does not prove your computer is offline.',
     skipped: 'You skipped the connection check.',
     retryCheck: 'Try the check again',
+    continueLink: "I can't disconnect – continue while connected",
+    continued: 'You chose to continue while connected.',
   },
 
   dialog: {
@@ -134,15 +142,15 @@ export const copy = {
     wordLabel: (position: number) => `Word ${position}`,
     origin: {
       unchanged: 'Random word',
-      combined: 'Two random words',
+      combined: 'Joined random words',
       edited: 'Edited',
       rewritten: 'Your own word',
       connector: 'Connecting word',
+      own: 'Added by you',
     },
     join: 'Join with next',
     split: 'Split',
     remove: (text: string) => `Remove ${text}`,
-    lockedNote: 'Locked',
     wordErrors: {
       empty: "A word can't be empty.",
       'too-long': 'Use 32 characters or fewer.',
@@ -151,11 +159,15 @@ export const copy = {
     },
     connectorsTitle: 'Connecting words',
     connectorsHelp: 'Drag one between your words, or select one and choose where it goes. They are not random words and are not counted.',
+    ownLabel: 'Your own word',
+    ownAdd: 'Add',
+    ownHelp: 'Anything you like: a word, digits or a symbol. It goes at the end of your phrase. Move it like any other word. Words you add never count as random words. Avoid anything others could link to you, such as names, birthdays or places.',
+    ownAdded: (text: string) => `${text} added at the end.`,
     separatorLegend: 'Between words',
-    separators: { space: 'Space', hyphen: 'Hyphen ( - )', period: 'Period ( . )', underscore: 'Underscore ( _ )' },
+    separators: { space: 'Space', hyphen: 'Hyphen ( - )', period: 'Period ( . )', underscore: 'Underscore ( _ )', none: 'Nothing' },
     previewLabel: 'Your phrase as you will type it',
-    counts: (intact: number, drawn: number, connectors: number, chars: number) =>
-      `${intact} of ${drawn} random words unchanged · ${connectors} connecting ${connectors === 1 ? 'word' : 'words'} · ${chars} characters`,
+    counts: (intact: number, drawn: number, connectors: number, chars: number, own = 0) =>
+      `${intact} of ${drawn} random words unchanged · ${connectors} connecting ${connectors === 1 ? 'word' : 'words'}${own ? ` · ${own} of your own` : ''} · ${chars} characters`,
     editedNote: 'Edited or replaced words no longer count as random words.',
     keyboardNote: 'Your phrase has characters that can be hard to type on some keyboards or start-up screens.',
     reset: 'Reset my changes',
@@ -200,7 +212,7 @@ export const copy = {
       lower: 'Edit a word to include a lowercase letter.',
       digit: 'Use Add a number below.',
       symbol: 'Use Add a symbol below, or put a hyphen, period or underscore between words.',
-      noSpaces: 'Choose a hyphen, period or underscore under Between words.',
+      noSpaces: 'Choose another option under Between words.',
       plainKeyboard: 'Edit words to remove accented letters or other special characters.',
     },
     otherRules: 'A service may have other rules. Try your phrase there.',
@@ -231,10 +243,12 @@ export const copy = {
     showEntry: 'Show entry',
     hideEntry: 'Hide entry',
     check: 'Check',
+    autoCheck: 'Check as I type',
+    live: { wrong: 'Wrong passphrase', short: 'Too short, keep going', long: 'Too long' },
+    clearEntry: 'Clear entry',
     match: 'That matches your phrase exactly.',
     mismatch: "That doesn't match yet. Check capitals, spaces and what sits between words.",
     retry: 'Try again',
-    skip: 'Skip practice',
     practiceLimits: "Your browser, its extensions and anyone who can see your screen are outside this page's control.",
     strengthTitle: 'How strong is this phrase?',
     strengthDraws: (intact: number, drawn: number, list: string) =>
@@ -246,9 +260,9 @@ export const copy = {
       'Based on how these words were generated. You chose which words to keep and their order; we do not count that as extra strength.',
     strengthRules: [
       'Locking, rerolling and reordering words do not add strength.',
-      'Two joined words still count as the two random words they came from, not as an extra word.',
+      'Joined words still count as the random words they came from, not as extra words.',
       'An edited word no longer counts as random. A word you replaced is your own word, even if it is in the word list.',
-      'Connecting words, separators, and the Capitalise, Add a number and Add a symbol options do not change the guidance.',
+      'Connecting words, your own words, separators, and the Capitalise, Add a number and Add a symbol options do not change the guidance.',
     ],
     moreTitle: 'Want to know more?',
     managersTitle: 'Password managers',
@@ -276,6 +290,13 @@ export const copy = {
     clear: 'Clear phrase',
     back: 'Back to Make it yours',
     cleared: 'Your phrase is cleared from this page. Your browser or device may still keep its own records.',
+    clearedTipsTitle: 'To remove what your browser may keep',
+    clearedTips: [
+      'Close this tab, or the whole window if you used a private window.',
+      'If your browser or password manager offered to save what you typed, open its saved passwords and delete that entry.',
+      "Delete this site from your browsing history if you don't want a record that you visited.",
+      'On a phone, the keyboard may have learned the words you typed. You can reset its dictionary in the keyboard settings.',
+    ],
     another: 'Make another phrase',
   },
 
@@ -289,16 +310,27 @@ export const copy = {
     clearTitle: 'Clear your phrase?',
     clearBody: "Make sure you have a recovery copy or know it by heart. Once it's cleared, this page can't show it again.",
     clearConfirm: 'Clear phrase',
+    connectedTitle: 'Continue while connected?',
+    connectedBody:
+      "Your words are still made only in this tab, and this page doesn't send them. But while you're connected, a tampered page or a browser extension could. If this is for something important, try again on a network you can switch off.",
+    connectedConfirm: 'Continue while connected',
+    connectedCancel: 'Go back and disconnect',
+    homeTitle: 'Start over?',
+    homeBody: 'Going back to the start clears your phrase from this page. The word list stays loaded, so you can make a new phrase without going online again.',
+    homeConfirm: 'Start over',
+    removeTitle: (text: string) => `Remove ${text}?`,
+    removeBody: 'It leaves your phrase, so it no longer counts toward strength. Reset my changes brings it back.',
+    removeConfirm: 'Remove',
     cancel: 'Keep my phrase',
   },
 
   band: {
-    labels: { red: 'Hold', notReady: 'Not ready', caution: 'Caution', green: 'Ready' },
+    labels: { red: 'Hold', continued: 'Connected', notReady: 'Not ready', caution: 'Caution', green: 'Ready' },
     details: 'Details',
-    'site-answered': 'Rememberphrase answered, so you are still connected. Generation is held; check Airplane mode and confirm again.',
+    'site-answered': "Rememberphrase answered, so you are still connected. Generation is held; check that you're disconnected and confirm again.",
     'network-answered':
-      'A network answered (this can be a Wi-Fi login page). You may still be connected. Generation is held; check Airplane mode and confirm again.',
-    reconnected: 'Your browser reported a connection. Generation is paused; check Airplane mode and confirm again.',
+      "A network answered (this can be a Wi-Fi login page). You may still be connected. Generation is held; check that you're disconnected and confirm again.",
+    reconnected: "Your browser reported a connection. Generation is paused; check that you're disconnected and confirm again.",
     list: 'Fetch the word list while you are still online.',
     rng: "This browser can't produce the random numbers Rememberphrase needs, so preparation can't continue here. Open Rememberphrase over https:// in an up-to-date browser.",
     unconfirmed: 'Offline status not confirmed. Go offline, then confirm.',
@@ -306,7 +338,9 @@ export const copy = {
     'local-check-failed':
       "This tab couldn't make random words just now, so making words is held. Try the check again. If it keeps failing, reload the page while online.",
     skipped: 'You skipped the connection check. You confirmed offline, and the word list is ready in this tab.',
-    'browser-online': 'Your browser still reports a network connection. This can be a VPN or virtual adapter; check Airplane mode.',
+    continued:
+      "You chose to continue while connected. Your words are still made only in this tab, and this page doesn't send them, but while you're connected a tampered page or a browser extension could.",
+    'browser-online': "Your browser still reports a network connection. This can be a VPN or virtual adapter; check that you're disconnected.",
     green: 'You confirmed offline, and the word list is ready in this tab.',
     greenNote: "Good to know: websites can't see your device's Airplane mode setting, so this relies on your own check.",
   },
@@ -315,8 +349,20 @@ export const copy = {
     red: 'Connection may be active',
     notReady: 'Offline not confirmed',
     skipped: 'Check skipped',
+    continued: 'You chose to continue while connected',
     'browser-online': 'Browser reports online',
     green: 'You confirmed offline',
+  },
+
+  home: 'back to the start',
+
+  footer: {
+    sponsored: 'Sponsored by',
+    sponsor: 'Shift Everywhere',
+    developed: 'Developed by',
+    developer: 'Niinlabs',
+    newTab: '(opens in a new tab)',
+    licence: 'Rememberphrase is open source under the Apache License 2.0. Word list: EFF Long Wordlist, CC BY 4.0.',
   },
 
   panel: {
@@ -339,7 +385,7 @@ export const copy = {
       body: [
         'Keep this tab open. If you close or reload it, you will need to go online and start again.',
         'Your real words are made in this tab, on this device, and this page never sends them anywhere. Going offline first is an extra check you control.',
-        'The page cannot tell for certain whether your device is offline. It relies on you, plus one short check that tries to reach Rememberphrase.',
+        'The page cannot tell for certain whether your device is offline. It relies on you, plus one small test that tries to reach rememberphrase.com.',
       ],
     },
     generate: {
@@ -353,7 +399,7 @@ export const copy = {
     compose: {
       title: 'About your phrase',
       body: [
-        "Moving, joining and connecting words can make the phrase easier to remember. They don't add strength.",
+        "Moving, joining and connecting words can make the phrase easier to remember. They don't necessarily add strength.",
         'An edited or replaced word no longer counts as a random word. Reset my changes brings the generated words back.',
         'The "Your phrase as you will type it" box shows exactly what you will type, including capitals, symbols and what sits between words.',
       ],
@@ -362,8 +408,8 @@ export const copy = {
       title: 'About practising',
       body: [
         'The check compares what you type with your phrase exactly, here in this tab. Nothing is sent or saved.',
-        'Practice is optional, and you can try as often as you like before using the phrase for real.',
-        'Keep this tab open until you have a recovery copy. Closing or reloading it loses the phrase.',
+        'Practice is optional, and you can try as much as you like before using the phrase for real.',
+        'Keep this tab open until you have noted down a recovery copy. Closing or reloading it loses the phrase.',
       ],
     },
     ready: {
@@ -375,7 +421,7 @@ export const copy = {
     },
     noStorage:
       'This site stores nothing in your browser: no cookies and no saved data. Your browser or device may still keep its own records, such as history.',
-    attribution: 'Word list: EFF Long Wordlist by the Electronic Frontier Foundation, CC BY 4.0.',
+    attribution: { before: 'Word list: EFF Long Wordlist by the ', link: 'Electronic Frontier Foundation', after: ', CC BY 4.0.' },
   },
 };
 

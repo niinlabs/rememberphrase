@@ -12,6 +12,7 @@ const ready: Readiness = {
   localCheckFailed: false,
   browserOnline: false,
   reconnected: false,
+  continuedConnected: false,
 };
 
 test.each([
@@ -31,6 +32,10 @@ test.each([
   ['reconnection outranks missing confirmation', { osConfirmed: false, reconnected: true }, 'red', false],
   ['Skip does not replace the local check', { probe: 'skipped', localCheckOk: false }, 'amber', false],
   ['a failed local check holds', { localCheckOk: false, localCheckFailed: true }, 'amber', false],
+  ['continuing while connected after an answer is red but allowed', { probe: 'site-answered', continuedConnected: true }, 'red', true],
+  ['continuing while connected after a reconnection is red but allowed', { reconnected: true, continuedConnected: true }, 'red', true],
+  ['continuing while connected still needs the local check', { probe: 'network-answered', continuedConnected: true, localCheckOk: false }, 'amber', false],
+  ['continuing while connected never turns green', { continuedConnected: true }, 'red', true],
 ] as const)('%s', (_name, change, colour, canGenerate) => {
   const status = connectionStatus({ ...ready, ...(change as Partial<Readiness>) });
   expect(status.colour).toBe(colour);
@@ -47,14 +52,17 @@ test('green only when every condition holds (no false green in any combination)'
           for (const localCheckOk of flags)
             for (const localCheckFailed of flags)
             for (const browserOnline of flags)
-              for (const reconnected of flags) {
-                const r = { listReady, rngAvailable, osConfirmed, probe, localCheckOk, localCheckFailed, browserOnline, reconnected };
-                const status = connectionStatus(r);
-                const allClear =
-                  listReady && rngAvailable && osConfirmed && probe === 'no-answer' && localCheckOk && !browserOnline && !reconnected;
-                expect(status.colour === 'green', JSON.stringify(r)).toBe(allClear);
-                if (status.colour === 'red' || !listReady || !rngAvailable) expect(status.canGenerate).toBe(false);
-              }
+              for (const reconnected of flags)
+                for (const continuedConnected of flags) {
+                  const r = { listReady, rngAvailable, osConfirmed, probe, localCheckOk, localCheckFailed, browserOnline, reconnected, continuedConnected };
+                  const status = connectionStatus(r);
+                  const allClear =
+                    listReady && rngAvailable && osConfirmed && probe === 'no-answer' && localCheckOk && !browserOnline && !reconnected && !continuedConnected;
+                  expect(status.colour === 'green', JSON.stringify(r)).toBe(allClear);
+                  // Red only allows drawing when the user chose to continue while connected.
+                  if (status.colour === 'red') expect(status.canGenerate, JSON.stringify(r)).toBe(continuedConnected);
+                  if (!listReady || !rngAvailable) expect(status.canGenerate).toBe(false);
+                }
 });
 
 test('a failed local check is named, so the page can offer a retry', () => {

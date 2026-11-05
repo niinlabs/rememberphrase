@@ -82,3 +82,59 @@ for (const width of [390, 320]) {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   });
 }
+
+test('a closed notice explains what changing the words does', async ({ page }) => {
+  await page.goto('/');
+  const notice = page.locator('details.notice');
+  await expect(notice).not.toHaveAttribute('open');
+  await notice.locator('summary').click();
+  for (const line of copy.landing.edit) await expect(notice.getByText(line)).toBeVisible();
+});
+
+test('the footer credits the sponsor and developer in new tabs, with the licence', async ({ page }) => {
+  await page.goto('/');
+  const footer = page.getByRole('contentinfo');
+  for (const [name, href] of [
+    [copy.footer.sponsor, 'https://shifteverywhere.com'],
+    [copy.footer.developer, 'https://github.com/niinlabs/rememberphrase'],
+  ]) {
+    const link = footer.getByRole('link', { name: new RegExp(`^${name}`) });
+    await expect(link).toHaveAttribute('href', href);
+    await expect(link).toHaveAttribute('target', '_blank'); // following it in this tab would lose the phrase
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  }
+  await expect(footer).toContainText(copy.footer.licence);
+  const eff = page.getByRole('link', { name: new RegExp(`^${copy.panel.attribution.link}`) });
+  await expect(eff).toHaveAttribute('href', 'https://www.eff.org/');
+  await expect(eff).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('banner')).toContainText(copy.tagline);
+});
+
+test('the logo leads home: straight away without a phrase, after a warning with one', async ({ page, context }) => {
+  const logo = page.getByRole('banner').getByRole('button', { name: /^Rememberphrase/ });
+  await page.goto('/');
+  await start(page).click();
+  await logo.click();
+  await expect(landingHeading(page)).toBeFocused();
+
+  await start(page).click();
+  await page.getByRole('button', { name: copy.list.action }).click();
+  await expect(page.getByText(copy.list.ready('English', '7,776'))).toBeVisible();
+  await context.setOffline(true);
+  await page.getByLabel(copy.offline.confirmLabel).check();
+  await page.getByRole('button', { name: copy.offline.confirm }).click();
+  await page.getByRole('button', { name: copy.generate.generate }).click();
+  await logo.click();
+  const warn = page.getByRole('alertdialog', { name: copy.warn.homeTitle });
+  await expect(warn.getByRole('button', { name: copy.warn.cancel })).toBeFocused();
+  await warn.getByRole('button', { name: copy.warn.cancel }).click();
+  await expect(page.locator('.tiles .word')).toHaveCount(6);
+
+  await logo.click();
+  await page.getByRole('alertdialog', { name: copy.warn.homeTitle }).getByRole('button', { name: copy.warn.homeConfirm }).click();
+  await expect(landingHeading(page)).toBeFocused();
+  await start(page).click();
+  await page.getByRole('button', { name: copy.ready.continue }).click(); // list and offline check kept
+  await expect(page.locator('.tiles .word')).toHaveCount(0); // the phrase is gone
+});
+

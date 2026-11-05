@@ -82,7 +82,7 @@ test('build has exactly one JS and one CSS file', () => {
 
 test('the header shows the logo, loaded from this site, with its name as alt text', async ({ page }) => {
   await startAtStep1(page);
-  const logo = page.getByRole('banner').getByRole('img', { name: 'Rememberphrase' });
+  const logo = page.getByRole('banner').locator('img[alt="Rememberphrase"]'); // inside the home button
   await expect(logo).toBeVisible();
   expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(640);
   expect(new URL(await logo.evaluate((img: HTMLImageElement) => img.currentSrc)).origin).toBe(new URL(page.url()).origin);
@@ -135,7 +135,7 @@ test('reconnecting after preparation interrupts in red, keeps the hold, and a fr
   await expect(band(page)).toContainText(copy.band.green);
 });
 
-test('a reachable site interrupts in red, sends no cookie or referrer, and cannot be continued past', async ({ page, context }) => {
+test('a reachable site interrupts in red, sends no cookie or referrer, and holds until a new check', async ({ page, context }) => {
   await fetchWords(page);
   const probe = page.waitForRequest('**/reachability.txt?*');
   await confirmOffline(page);
@@ -149,6 +149,61 @@ test('a reachable site interrupts in red, sends no cookie or referrer, and canno
   await confirmOffline(page);
   await expect(ready(page)).toBeVisible(); // a later offline check is not a cached replay
   await expectNoCspViolations(page);
+});
+
+const continueLink = (page: Page) => page.getByRole('button', { name: copy.offline.continueLink });
+
+test('from red, a deliberate, confirmed choice continues while connected and stays red throughout', async ({ page, context }) => {
+  await fetchWords(page);
+  await confirmOffline(page); // still online: Rememberphrase answers
+  await acknowledgeAlert(page, copy.band['site-answered']);
+
+  await continueLink(page).click();
+  const warn = page.getByRole('alertdialog', { name: copy.warn.connectedTitle });
+  await expect(warn.getByRole('button', { name: copy.warn.connectedCancel })).toBeFocused(); // the safe choice
+  await warn.getByRole('button', { name: copy.warn.connectedCancel }).click();
+  await expect(band(page)).toContainText(copy.band['site-answered']);
+
+  await continueLink(page).click();
+  await page.getByRole('alertdialog', { name: copy.warn.connectedTitle }).getByRole('button', { name: copy.warn.connectedConfirm }).click();
+  await expect(ready(page)).toBeVisible();
+  await expect(band(page)).toContainText(`${copy.band.labels.continued}. ${copy.band.continued}`);
+  await expect(band(page)).toHaveClass(/red/);
+  await expect(chip(page)).toHaveText(copy.chip.continued);
+  await page.getByRole('button', { name: copy.generate.generate }).click();
+  await expect(page.locator('.tiles .word')).toHaveCount(6);
+
+  // Having chosen to stay connected, network changes no longer interrupt.
+  await context.setOffline(true);
+  await context.setOffline(false);
+  await expect(alert(page)).toHaveCount(0);
+  await expectNoCspViolations(page);
+});
+
+test('the choice covers one phrase: after Clear phrase, drawing is held again', async ({ page }) => {
+  await fetchWords(page);
+  await confirmOffline(page);
+  await acknowledgeAlert(page, copy.band['site-answered']);
+  await continueLink(page).click();
+  await page.getByRole('alertdialog', { name: copy.warn.connectedTitle }).getByRole('button', { name: copy.warn.connectedConfirm }).click();
+  await page.getByRole('button', { name: copy.generate.generate }).click();
+  await page.getByRole('button', { name: copy.generate.continue }).click();
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await page.getByRole('button', { name: copy.remember.clear }).click();
+  await page.getByRole('alertdialog', { name: copy.warn.clearTitle }).getByRole('button', { name: copy.warn.clearConfirm }).click();
+  await page.getByRole('button', { name: copy.remember.another }).click();
+  await expect(page.getByRole('button', { name: copy.generate.generate })).toBeDisabled();
+  await expect(chip(page)).toHaveText(copy.chip.red);
+});
+
+test('continuing while connected is offered only from red', async ({ page, context }) => {
+  await fetchWords(page);
+  await expect(continueLink(page)).toHaveCount(0); // amber: not confirmed yet
+  await context.setOffline(true);
+  await confirmOffline(page);
+  await expect(ready(page)).toBeVisible();
+  await page.getByRole('button', { name: copy.generate.back }).click();
+  await expect(continueLink(page)).toHaveCount(0); // green
 });
 
 for (const [name, response] of [

@@ -9,10 +9,12 @@ export type Readiness = {
   localCheckFailed: boolean; // the last silent draw threw; it can be retried
   browserOnline: boolean; // navigator.onLine: a hint only
   reconnected: boolean; // the browser reported coming online after the user confirmed offline
+  continuedConnected: boolean; // the user chose to continue while connected (D7 as amended 2026-11-05)
 };
 
 export type Status =
   | { colour: 'red'; canGenerate: false; reason: 'site-answered' | 'network-answered' | 'reconnected' }
+  | { colour: 'red'; canGenerate: true; reason: 'continued' }
   | { colour: 'amber'; canGenerate: false; reason: 'list' | 'rng' | 'unconfirmed' | 'local-check' | 'local-check-failed' }
   | { colour: 'amber'; canGenerate: true; reason: 'skipped' | 'browser-online' }
   | { colour: 'green'; canGenerate: true };
@@ -21,6 +23,13 @@ export type Status =
 export function connectionStatus(r: Readiness): Status {
   if (!r.listReady) return { colour: 'amber', canGenerate: false, reason: 'list' };
   if (!r.rngAvailable) return { colour: 'amber', canGenerate: false, reason: 'rng' };
+  // A deliberate choice to continue while connected allows drawing but always stays red, never amber or green.
+  if (r.continuedConnected) {
+    if (!r.localCheckOk) {
+      return { colour: 'amber', canGenerate: false, reason: r.localCheckFailed ? 'local-check-failed' : 'local-check' };
+    }
+    return { colour: 'red', canGenerate: true, reason: 'continued' };
+  }
   if (r.probe === 'site-answered' || r.probe === 'network-answered') {
     return { colour: 'red', canGenerate: false, reason: r.probe };
   }
