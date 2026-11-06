@@ -1,5 +1,6 @@
 :root {
   --navy-950: #08122a;
+  --page: #0b1b2d; /* the page background, matching the edges of the corner image */
   --navy-900: #0e1b3a;
   --navy-700: #24365f;
   --ink: #0e1a33;
@@ -26,8 +27,8 @@
   color-scheme: light;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--ink);
-  background: var(--navy-950);
-  scrollbar-color: var(--navy-700) var(--navy-950);
+  background: var(--page);
+  scrollbar-color: var(--navy-700) var(--page);
   -webkit-font-smoothing: antialiased;
 }
 
