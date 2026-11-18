@@ -1,9 +1,6 @@
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-white.png">
-    <img src="docs/images/logo.png" alt="Rememberphrase" width="420">
-  </picture>
-</h1>
+<!-- One banner on the site's own navy: GitHub's light/dark image switch follows the browser, not the
+     theme chosen on GitHub, so a transparent logo can end up on the wrong background. -->
+<h1><img src="docs/images/banner.png" alt="Rememberphrase"></h1>
 
 **Random start. Your story. A passphrase you can remember.**
 
