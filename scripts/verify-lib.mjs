@@ -21,6 +21,18 @@ export function check(name, fn) {
   }
 }
 
+// The same as check, for a check that has to wait (network requests).
+export async function checkAsync(name, fn) {
+  try {
+    const problem = await fn();
+    if (!problem) results.push(['PASS', name]);
+    else if (Array.isArray(problem)) results.push([problem[0], `${name}: ${problem[1]}`]);
+    else results.push(['FAIL', `${name}: ${problem}`]);
+  } catch (e) {
+    results.push(['FAIL', `${name}: ${e.message}`]);
+  }
+}
+
 export function finish(label) {
   for (const [result, name] of results) console.log(`${result.padEnd(7)} ${name}`);
   const overall = results.some(([r]) => r === 'FAIL') ? 'FAIL' : results.some(([r]) => r === 'BLOCKED') ? 'BLOCKED' : 'PASS';

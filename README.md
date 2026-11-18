@@ -68,7 +68,7 @@ Approved project decisions are recorded in [docs/decisions](docs/decisions).
 
 ### Release checks
 
-The project was built in work packages, WP00 to WP04. Each has a verifier in `scripts/` that runs its automated checks. From WP01 on, a verifier prints PASS only once the matching manual record in [docs/evidence](docs/evidence) has a date and a passing result:
+The project was built in work packages, WP00 to WP05. Each has a verifier in `scripts/` that runs its automated checks. From WP01 on, a verifier prints PASS only once the matching manual record in [docs/evidence](docs/evidence) has a date and a passing result:
 
 ```bash
 ./scripts/verify-wp00.mjs      # decisions and word-list evidence
@@ -76,7 +76,10 @@ The project was built in work packages, WP00 to WP04. Each has a verifier in `sc
 ./scripts/verify-wp02.mjs      # Generate and Make it yours
 ./scripts/verify-wp03.mjs      # Remember and login requirements
 ./scripts/verify-wp04.mjs      # landing page
+./scripts/verify-wp05.mjs      # release proof: clean build, live site, whole journey, browser profiles
 ```
+
+The WP05 verifier builds the committed version from a fresh clone and checks that https://rememberphrase.com serves exactly that build, with the expected headers. It also opens Chrome and Firefox for about a minute ([profile-persistence.mjs](tests/security/profile-persistence.mjs)): it makes a phrase, force-quits the browser and searches the profile's files for the phrase. Its manual steps are in [docs/release](docs/release).
 
 ## Deploying
 
