@@ -277,10 +277,38 @@ export const phraseText = (p: Phrase) =>
 
 // --- Provenance (D8) -----------------------------------------------------------------------
 
-// Familiar look-alike swaps still count as the same letter.
-const LOOKALIKES: Record<string, string> = { a: 'a4@', e: 'e3', i: 'i1!', l: 'l1', o: 'o0', s: 's5$', t: 't7' };
+// Look-alike and leetspeak swaps that still count as the same letter (D8). Some take several characters.
+const LOOKALIKES: Record<string, string[]> = {
+  a: ['4', '@', '^', '/\\', '/-\\'],
+  b: ['8', '6', '|3', '13'],
+  c: ['(', '<', '{', '['],
+  d: ['|)', '[)', '|>'],
+  e: ['3', '€', '&'],
+  f: ['ph', '|='],
+  g: ['9', '6', '&'],
+  h: ['#', '|-|', '}{', ']-['],
+  i: ['1', '!', '|'],
+  j: ['_|', ']'],
+  k: ['|<', '|{'],
+  l: ['1', '|', '£', '|_'],
+  m: ['|\\/|', '/\\/\\', '|v|'],
+  n: ['|\\|', '/\\/'],
+  o: ['0', '()', '[]'],
+  p: ['|*', '|o', '|>'],
+  q: ['9', '0_'],
+  r: ['|2', '12'],
+  s: ['5', '$'],
+  t: ['7', '+'],
+  u: ['|_|', '(_)'],
+  v: ['\\/'],
+  w: ['\\/\\/', 'vv', '\\^/'],
+  x: ['><', '%'],
+  y: ['`/'],
+  z: ['2'],
+};
 const escape = (c: string) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const pattern = (word: string) => [...word.toLowerCase()].map((c) => (LOOKALIKES[c] ? `[${escape(LOOKALIKES[c])}]` : escape(c))).join('');
+const pattern = (word: string) =>
+  [...word.toLowerCase()].map((c) => `(?:${[c, ...(LOOKALIKES[c] ?? [])].map(escape).join('|')})`).join('');
 
 // D8 as amended 2026-11-18: a draw still counts as random while its word is in the text in one piece,
 // allowing capitals and look-alike swaps, with anything added before or after it. Dressing a word up

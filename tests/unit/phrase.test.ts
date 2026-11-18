@@ -155,10 +155,32 @@ describe('editing and provenance (D8, D10)', () => {
     const p = six();
     const at = (text: string) => edit(p, 'w0', text);
     expect(origin(p, p.tokens[0])).toBe('unchanged');
-    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES', '#m@p1e', 'mAp1e7']) {
+    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES', '#m@p1e', 'mAp1e7', 'map|e']) {
       expect(origin(at(t), at(t).tokens[0]), t).toBe('edited');
       expect(intactRandomWords(at(t)), t).toBe(6);
     }
+  });
+
+  test('every offered look-alike swap keeps a word random', () => {
+    const p = generate(4, sequence('badger', 'zigzag', 'lantern', 'velvet'));
+    for (const [id, text] of [['w0', '8@d9er'], ['w0', 'BADG3R'], ['w0', 'b4d6er'], ['w1', '2!9z@g'], ['w1', 'z|gz4g'], ['w2', '|4n+3rn']]) {
+      const edited = edit(p, id, text);
+      expect(intactRandomWords(edited), text).toBe(4);
+    }
+    expect(intactRandomWords(edit(p, 'w0', '8adg3s'))).toBe(3); // r is not s
+  });
+
+  test('leetspeak swaps of several characters keep a word random too', () => {
+    const p = generate(4, sequence('hammock', 'dwarf', 'quiver', 'yolk'));
+    const cases: [string, string][] = [
+      ['w0', String.raw`|-|4|\/|m0(k`],
+      ['w0', String.raw`#@/\/\M()<|<`],
+      ['w1', String.raw`|)\/\/@|2ph`],
+      ['w2', String.raw`0_|_|!\/3|2`],
+      ['w3', '`/[]|_|{'],
+    ];
+    for (const [id, text] of cases) expect(intactRandomWords(edit(p, id, text)), text).toBe(4);
+    expect(intactRandomWords(edit(p, 'w1', String.raw`|)\/@|2ph`))).toBe(3); // \/ is v, not w
   });
 
   test('a replaced word, or one with letters removed or split up, no longer counts', () => {
