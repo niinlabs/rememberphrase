@@ -4,7 +4,7 @@ Rememberphrase helps people make a passphrase they will use for important accoun
 
 ## Reporting a problem
 
-Please report security problems privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability**, or go to <https://github.com/niinlabs/rememberphrase/security/advisories/new>. Do not open a public issue.
+Please report security problems privately through GitHub at <https://github.com/niinlabs/rememberphrase/security/advisories/new>. You can also find it on the repository page under **Security and quality → Advisories → Report a vulnerability**. Do not open a public issue.
 
 Include what you found, the steps to reproduce it, and the browser and device you used. You will get a reply in the advisory thread. Once a fix is released, you can be credited if you wish.
 
