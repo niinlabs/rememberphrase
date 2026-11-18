@@ -132,7 +132,8 @@ export const copy = {
     intro: 'Move, join or edit your words, and add connecting words if they help you picture a sentence.',
     tilesLabel: 'Your phrase, word by word',
     moveHelp: 'Drag to move, or select and choose where to put it. With the keyboard, use the arrow keys.',
-    handle: (text: string) => `Move ${text}`,
+    // Names carry the position, so two tiles with the same word never share one.
+    handle: (text: string, position: number) => `Move ${text}, position ${position}`,
     moved: (text: string, position: number, total: number) => `${text} moved to position ${position} of ${total}.`,
     moveHere: (position: number) => `Move here, position ${position}`,
     insertHere: (text: string, position: number) => `Insert ${text} here, position ${position}`,
@@ -150,7 +151,9 @@ export const copy = {
     },
     join: 'Join with next',
     split: 'Split',
-    remove: (text: string) => `Remove ${text}`,
+    remove: (text: string, position: number) => `Remove ${text}, position ${position}`,
+    removed: (text: string) => `${text} removed.`,
+    removeShort: 'Remove',
     wordErrors: {
       empty: "A word can't be empty.",
       'too-long': 'Use 32 characters or fewer.',
@@ -197,6 +200,7 @@ export const copy = {
     summary: (met: number, total: number) => `${met} of ${total} ${total === 1 ? 'rule' : 'rules'} met`,
     intro: 'Optional. Enter only what the service or computer asks for, and this page checks your phrase against it.',
     minLength: 'At least this many characters',
+    lengthError: 'Enter a whole number from 1 to 999.',
     maxLength: 'At most this many characters',
     options: {
       upper: 'Needs an uppercase letter',

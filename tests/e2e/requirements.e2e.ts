@@ -30,6 +30,24 @@ async function openSection(page: Page) {
   await expect(section(page)).toHaveAttribute('open');
 }
 
+test('a length rule must be a whole number in range: 1e3 or 1.5 is refused with a reason, never read as 1', async ({ page, context }) => {
+  await reachCompose(page, context);
+  await openSection(page);
+  const min = page.getByLabel(copy.requirements.minLength);
+  for (const bad of ['1e3', '1.5', '1000', '0']) {
+    await min.clear(); // typed key by key: Firefox's driver does not reliably replace a number field's value
+    await min.pressSequentially(bad);
+    await expect(min).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByText(copy.requirements.lengthError)).toBeVisible();
+    await expect(page.getByTestId('checklist')).toHaveCount(0); // no rule, so no false Met
+  }
+  await min.clear();
+  await min.pressSequentially('20');
+  await expect(min).not.toHaveAttribute('aria-invalid');
+  await expect(page.getByText(copy.requirements.lengthError)).toHaveCount(0);
+  await expect(item(page, copy.requirements.rule.minLength(20))).toBeVisible();
+});
+
 test('requirements start closed and not specified, with nothing to check', async ({ page, context }) => {
   await reachCompose(page, context);
   await expect(section(page)).not.toHaveAttribute('open');

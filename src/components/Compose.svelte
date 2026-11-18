@@ -242,6 +242,20 @@
     phrase = edit(phrase, id, value);
   }
 
+  // An invalid edit is not in the phrase yet, so Remember would practise the old text: stay, and take the
+  // visitor to the field whose error says what to fix.
+  function continueOn() {
+    const invalid = list.querySelector<HTMLInputElement>('input[aria-invalid="true"]');
+    if (invalid) invalid.focus();
+    else oncontinue();
+  }
+
+  // A removal replaces whatever was last announced, so no stale "added" message stays in the live region.
+  function removeAddedToken(token: Token) {
+    change(removeAdded(phrase, token.id));
+    announcement = copy.compose.removed(token.text);
+  }
+
   // Joining, splitting and removing replace tokens, so a selection pointing at them is cleared.
   function change(next: Phrase) {
     placing = null;
@@ -377,7 +391,7 @@
         <button
           class="handle"
           data-handle={token.id}
-          aria-label={copy.compose.handle(token.text)}
+          aria-label={copy.compose.handle(token.text, i + 1)}
           aria-describedby="move-help"
           aria-pressed={sameItem(placing, item)}
           onpointerdown={(e) => pointerDown(e, item)}
@@ -391,7 +405,7 @@
         </button>
         <span class="origin">{copy.compose.origin[o]}</span>
         {#if token.kind === 'word' && canRemoveWord(phrase)}
-          <button class="remove-word" aria-label={copy.compose.remove(token.text)} onclick={() => (removing = token)}>
+          <button class="remove-word" aria-label={copy.compose.remove(token.text, i + 1)} onclick={() => (removing = token)}>
             <Icon name="close" size={16} />
           </button>
         {/if}
@@ -412,12 +426,12 @@
         {#if errors[token.id]}<p class="error" id="err-{token.id}">{copy.compose.wordErrors[errors[token.id]]}</p>{/if}
         <div class="actions">
           {#if canSplit(phrase, token.id)}
-            <button class="small" aria-label="{copy.compose.split}: {token.text}" onclick={() => change(split(phrase, token.id))}>
+            <button class="small" aria-label="{copy.compose.split}: {token.text}, position {i + 1}" onclick={() => change(split(phrase, token.id))}>
               {copy.compose.split}
             </button>
           {/if}
           {#if canCombine(phrase, token.id)}
-            <button class="small" aria-label="{copy.compose.join}: {token.text}" onclick={() => change(combine(phrase, token.id))}>
+            <button class="small" aria-label="{copy.compose.join}: {token.text}, position {i + 1}" onclick={() => change(combine(phrase, token.id))}>
               {copy.compose.join}
             </button>
           {/if}
@@ -436,17 +450,17 @@
         />
         {#if errors[token.id]}<p class="error" id="err-{token.id}">{copy.compose.wordErrors[errors[token.id]]}</p>{/if}
         <div class="actions">
-          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeAdded(phrase, token.id))}>
+          <button class="small" aria-label={copy.compose.remove(token.text, i + 1)} onclick={() => removeAddedToken(token)}>
             <Icon name="close" size={16} />
-            {copy.compose.remove('')}
+            {copy.compose.removeShort}
           </button>
         </div>
       {:else}
         <span class="connector-text">{token.text}</span>
         <div class="actions">
-          <button class="small" aria-label={copy.compose.remove(token.text)} onclick={() => change(removeAdded(phrase, token.id))}>
+          <button class="small" aria-label={copy.compose.remove(token.text, i + 1)} onclick={() => removeAddedToken(token)}>
             <Icon name="close" size={16} />
-            {copy.compose.remove('')}
+            {copy.compose.removeShort}
           </button>
         </div>
       {/if}
@@ -528,7 +542,7 @@
     {copy.compose.reset}
   </button>
   <button class="button secondary" onclick={() => (freshOpen = true)} disabled={!status.canGenerate}>{copy.compose.startFresh}</button>
-  <button class="button primary" onclick={oncontinue}>
+  <button class="button primary" onclick={continueOn}>
     {copy.compose.continue}
     <Icon name="forward" />
   </button>
@@ -543,6 +557,7 @@
     const { [removing!.id]: _, ...rest } = errors;
     errors = rest;
     change(removeWord(phrase, removing!.id));
+    announcement = copy.compose.removed(removing!.text);
     removing = null;
   }}
   oncancel={() => (removing = null)}

@@ -5,6 +5,9 @@ import { startAtStep1 } from './start';
 
 // WP03 slice 1 browser fixtures: Remember, practise and clear. The phrase is a fresh random draw in
 // a test browser, never a real secret, and nothing here prints it.
+// Tile buttons carry the position after the word (2026-11-18), so match the word and any position.
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const removeName = (text: string) => new RegExp(`^Remove ${escapeRe(text)}, position \\d+$`);
 const entry = (page: Page) => page.getByLabel(copy.remember.attemptLabel, { exact: true });
 const eye = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) entry$/ });
 const result = (page: Page) => page.locator('.result');
@@ -433,7 +436,7 @@ test('every change in Make it Yours or Generate reaches the counts, the login ch
   await changed({ intact: 6, connectors: 1, spaces: true });
   await page.getByRole('radio', { name: copy.compose.separators.hyphen }).check();
   await changed({ intact: 6, connectors: 1, spaces: false });
-  await page.getByRole('button', { name: copy.compose.remove('the') }).click();
+  await page.getByRole('button', { name: removeName('the') }).click();
   await changed({ intact: 6, connectors: 0, spaces: false });
   await field(page, 3).fill('Qzv'); // replaced
   await changed({ intact: 5, connectors: 0, spaces: false });

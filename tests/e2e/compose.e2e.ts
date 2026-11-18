@@ -7,7 +7,11 @@ import { startAtStep1 } from './start';
 const preview = (page: Page) => page.getByTestId('phrase-preview');
 const story = (page: Page) => page.getByTestId('story-preview');
 const tiles = (page: Page) => page.getByRole('list', { name: copy.compose.tilesLabel }).locator('li.token');
-const handle = (page: Page, text: string) => page.getByRole('button', { name: copy.compose.handle(text), exact: true });
+// Tile buttons carry the position after the word (2026-11-18), so match the word and any position.
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const removeName = (text: string) => new RegExp(`^Remove ${escapeRe(text)}, position \\d+$`);
+const handle = (page: Page, text: string) =>
+  page.getByRole('button', { name: new RegExp(`^Move ${escapeRe(text)}, position \\d+$`) });
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
 async function reachCompose(page: Page, context: BrowserContext, count = 6) {
@@ -135,7 +139,7 @@ test('connecting words insert by selecting or dragging, never count as random, a
   await expect(story(page)).toHaveText(withBoth);
   await expect(story(page).locator('.added')).toHaveText(['with', 'under']); // set apart from the random words
 
-  await page.getByRole('button', { name: copy.compose.remove('with') }).click();
+  await page.getByRole('button', { name: removeName('with') }).click();
   await expect(story(page)).toHaveText([words[0], words[1], words[2], 'under', ...words.slice(3)].join(' '));
 });
 
@@ -249,7 +253,7 @@ test('removing a selected connecting word clears the selection without errors', 
   await page.getByRole('button', { name: copy.compose.insertHere('with', 2) }).click();
   await handle(page, 'with').click(); // select the inserted connector for moving
   await expect(page.getByText(copy.compose.placingWord('with'))).toBeVisible();
-  await page.getByRole('button', { name: copy.compose.remove('with') }).click();
+  await page.getByRole('button', { name: removeName('with') }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
   // The selection itself is gone, not just its text: no Cancel and no "Move here" spots remain.
   await expect(page.getByRole('button', { name: copy.compose.cancelPlacing })).toHaveCount(0);
@@ -391,13 +395,13 @@ test('while dragging, a copy of the word follows the pointer and the other words
 
 test('a word can be removed after a confirmation; Reset brings it back; the last word stays', async ({ page, context }) => {
   const words = await reachCompose(page, context);
-  await page.getByRole('button', { name: copy.compose.remove(words[2]) }).click();
+  await page.getByRole('button', { name: removeName(words[2]) }).click();
   const warn = page.getByRole('alertdialog', { name: copy.warn.removeTitle(words[2]) });
   await expect(warn.getByRole('button', { name: copy.warn.cancel })).toBeFocused();
   await warn.getByRole('button', { name: copy.warn.cancel }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
 
-  await page.getByRole('button', { name: copy.compose.remove(words[2]) }).click();
+  await page.getByRole('button', { name: removeName(words[2]) }).click();
   await page.getByRole('alertdialog', { name: copy.warn.removeTitle(words[2]) }).getByRole('button', { name: copy.warn.removeConfirm }).click();
   const five = words.filter((_, i) => i !== 2);
   await expect(preview(page)).toHaveText(five.join(' '));
@@ -406,11 +410,11 @@ test('a word can be removed after a confirmation; Reset brings it back; the last
   await expect(preview(page)).toHaveText(words.join(' '));
 
   for (const w of words.slice(1)) {
-    await page.getByRole('button', { name: copy.compose.remove(w) }).click();
+    await page.getByRole('button', { name: removeName(w) }).click();
     await page.getByRole('alertdialog', { name: copy.warn.removeTitle(w) }).getByRole('button', { name: copy.warn.removeConfirm }).click();
   }
   await expect(preview(page)).toHaveText(words[0]);
-  await expect(page.getByRole('button', { name: copy.compose.remove(words[0]) })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: removeName(words[0]) })).toHaveCount(0);
 });
 
 test('any number of words join into one, and Split separates them all again', async ({ page, context }) => {
@@ -453,8 +457,36 @@ test('your own word is added at the end, moves and edits like a tile, and never 
   await expect(preview(page)).toHaveText([...words.slice(0, 5), 'our 3rd!', words[5]].join(' '));
   await expect(tiles(page).nth(5)).toContainText(copy.compose.origin.own);
 
-  await page.getByRole('button', { name: copy.compose.remove('our 3rd!') }).click();
+  await page.getByRole('button', { name: removeName('our 3rd!') }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
+  // The live region now says what happened last, not the old "added at the end".
+  await expect(page.locator('p.visually-hidden[aria-live="polite"]')).toHaveText(copy.compose.removed('our 3rd!'));
+});
+
+test('Continue does not leave while an edit is invalid: it goes to the field instead', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  await field(page, 2).fill('');
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await expect(page.getByRole('heading', { level: 1, name: copy.compose.heading })).toBeVisible();
+  await expect(field(page, 2)).toBeFocused();
+  await expect(page.getByText(copy.compose.wordErrors.empty)).toBeVisible();
+
+  await field(page, 2).fill('Qzv');
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await expect(page.getByRole('heading', { level: 1, name: copy.remember.heading })).toBeFocused();
+  await page.getByRole('button', { name: copy.remember.showPhrase }).click();
+  await expect(page.getByTestId('reference-phrase')).toHaveText([words[0], 'Qzv', ...words.slice(2)].join(' '));
+});
+
+test('repeated words get different button names, told apart by position', async ({ page, context }) => {
+  await reachCompose(page, context);
+  for (const at of [1, 3]) {
+    await page.getByRole('button', { name: 'and', exact: true }).click();
+    await page.getByRole('button', { name: copy.compose.insertHere('and', at) }).click();
+  }
+  const names = await page.getByRole('button', { name: /^(Move|Remove) and, position \d+$/ }).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+  expect(names).toHaveLength(4);
+  expect(new Set(names).size).toBe(4);
 });
 
 for (const width of [1280, 390]) {

@@ -17,9 +17,13 @@
     untrack(() => checks.length > 0 || phrase.decoration.capitalise !== 'none' || !!phrase.decoration.digit || !!phrase.decoration.symbol),
   );
 
-  function setLength(key: 'minLength' | 'maxLength', value: string) {
-    const n = Number.parseInt(value, 10);
-    rules = { ...rules, [key]: Number.isInteger(n) && n > 0 ? n : null };
+  // The whole entry must be a whole number in range: "1e3" or "1.5" is refused with a reason, never read
+  // as 1. A number field reports text it cannot read as empty, so badInput catches that too.
+  let lengthErrors = $state({ minLength: false, maxLength: false });
+  function setLength(key: 'minLength' | 'maxLength', input: HTMLInputElement) {
+    const valid = /^\d{1,3}$/.test(input.value) && Number(input.value) >= 1;
+    lengthErrors = { ...lengthErrors, [key]: input.validity.badInput || (input.value !== '' && !valid) };
+    rules = { ...rules, [key]: valid ? Number(input.value) : null };
   }
 
   const ruleText = (id: keyof Rules) =>
@@ -36,10 +40,22 @@
 
   <div class="rules">
     {#each ['minLength', 'maxLength'] as const as key (key)}
-      <label class="length">
-        <span>{copy.requirements[key]}</span>
-        <input type="number" min="1" max="999" inputmode="numeric" value={rules[key] ?? ''} oninput={(e) => setLength(key, e.currentTarget.value)} />
-      </label>
+      <div>
+        <label class="length">
+          <span>{copy.requirements[key]}</span>
+          <input
+            type="number"
+            min="1"
+            max="999"
+            inputmode="numeric"
+            value={rules[key] ?? ''}
+            aria-invalid={lengthErrors[key] ? 'true' : undefined}
+            aria-describedby={lengthErrors[key] ? `${key}-error` : undefined}
+            oninput={(e) => setLength(key, e.currentTarget)}
+          />
+        </label>
+        {#if lengthErrors[key]}<p class="error" id="{key}-error">{copy.requirements.lengthError}</p>{/if}
+      </div>
     {/each}
     {#each options as id (id)}
       <label class="option">
@@ -154,6 +170,15 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.6rem;
+  }
+  .error {
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+    font-weight: 650;
+    color: var(--red);
+  }
+  .length input[aria-invalid='true'] {
+    border-color: var(--red);
   }
   .length input {
     width: 5rem;
