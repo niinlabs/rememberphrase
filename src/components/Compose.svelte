@@ -272,7 +272,7 @@
 
   function removeAddedToken(token: Token) {
     change(removeAdded(phrase, token.id));
-    announce(copy.compose.removed(token.text));
+    announce(copy.compose.removed);
   }
 
   // Joining, splitting and removing replace tokens, so a selection pointing at them is cleared.
@@ -577,7 +577,7 @@
     const { [removing!.id]: _, ...rest } = errors;
     errors = rest;
     change(removeWord(phrase, removing!.id));
-    announce(copy.compose.removed(removing!.text));
+    announce(copy.compose.removed);
     removing = null;
   }}
   oncancel={() => (removing = null)}

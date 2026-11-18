@@ -462,7 +462,8 @@ test('your own word is added at the end, moves and edits like a tile, and never 
   await expect(preview(page)).toHaveText(words.join(' '));
   // The live region says what happened last, then empties, so it never keeps a word that left the phrase.
   const live = page.locator('p.visually-hidden[aria-live="polite"]');
-  await expect(live).toHaveText(copy.compose.removed('our 3rd!'));
+  await expect(live).toHaveText(copy.compose.removed); // names no word, so the removed one is gone at once
+  await expect(live).not.toContainText('our 3rd!');
   await expect(live).toHaveText('', { timeout: 8000 });
 });
 

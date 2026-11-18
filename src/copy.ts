@@ -152,7 +152,8 @@ export const copy = {
     join: 'Join with next',
     split: 'Split',
     remove: (text: string, position: number) => `Remove ${text}, position ${position}`,
-    removed: (text: string) => `${text} removed.`,
+    // Generic on purpose: the live region never holds a word that has just left the phrase.
+    removed: 'Word removed.',
     removeShort: 'Remove',
     wordErrors: {
       empty: "A word can't be empty.",
