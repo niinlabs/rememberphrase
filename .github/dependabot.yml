@@ -22,6 +22,10 @@ updates:
     versioning-strategy: increase
     cooldown:
       default-days: 7
+    ignore:
+      # Its Firefox crashes the page during the accessibility checks (2026-11-18); later versions are offered.
+      - dependency-name: '@playwright/test'
+        versions: ['1.65.0']
     # Minor and patch updates come as one pull request; a major update gets its own, as it may need code changes.
     groups:
       packages:
