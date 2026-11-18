@@ -9,6 +9,7 @@ const entry = (page: Page) => page.getByLabel(copy.remember.attemptLabel, { exac
 const eye = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) entry$/ });
 const result = (page: Page) => page.locator('.result');
 const reveal = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) phrase$/ });
+const hint = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) connecting words$/ });
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
 async function reachCompose(page: Page, context: BrowserContext, count = 6) {
@@ -48,6 +49,39 @@ test('Make it Yours leads to Remember: tips, the guidance and recovery show, and
   await expect(page.getByTestId('reference-phrase')).toHaveText(phrase);
   await reveal(page).click();
   await expect(page.getByTestId('reference-phrase')).toHaveCount(0);
+});
+
+test('Show connecting words masks each random word with one star per letter, between the words in clear', async ({ page, context }) => {
+  await reachRemember(page, context);
+  await expect(hint(page)).toHaveCount(0); // nothing to show without connecting or own words
+  await page.getByRole('button', { name: copy.remember.back }).click();
+  const words = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => field(page, n).inputValue()));
+  for (const [c, at] of [['and', 2], ['with', 4]] as const) {
+    await page.getByRole('button', { name: c, exact: true }).click();
+    await page.getByRole('button', { name: copy.compose.insertHere(c, at) }).click();
+  }
+  await page.locator('details.requirements summary').click();
+  await page.getByRole('radio', { name: copy.requirements.capitalise.every }).check();
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+
+  const stars = (w: string) => '*'.repeat([...w].length);
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  const expected = [stars(words[0]), 'And', stars(words[1]), 'With', ...words.slice(2).map(stars)].join(' '); // cased as typed
+  await hint(page).click();
+  await expect(hint(page)).toHaveAccessibleName(copy.remember.hideHint);
+  const shown = page.getByTestId('reference-hint');
+  await expect(shown.locator('[aria-hidden="true"]')).toHaveCount(6);
+  // What is seen: stars and connecting words; screen readers hear the length instead of the stars.
+  expect(await shown.evaluate((el) => {
+    const seen = el.cloneNode(true) as HTMLElement;
+    seen.querySelectorAll('.visually-hidden').forEach((n) => n.remove());
+    return seen.textContent!.trim();
+  })).toBe(expected);
+  await expect(shown).toContainText(copy.remember.hiddenWord([...words[0]].length));
+
+  await reveal(page).click(); // the phrase replaces the hint
+  await expect(page.getByTestId('reference-hint')).toHaveCount(0);
+  await expect(page.getByTestId('reference-phrase')).toHaveText(words.map(cap).join(' '));
 });
 
 test('the entry starts masked; the eye shows and hides it without losing the text or focus', async ({ page, context }) => {
@@ -112,6 +146,7 @@ test('practice compares against the final phrase after edits, connecting words a
   await field(page, 1).fill(`${first[0].toUpperCase()}${first.slice(1)}7!`);
   await page.getByRole('button', { name: 'the', exact: true }).click();
   await page.getByRole('button', { name: copy.compose.insertHere('the', 2) }).click();
+  await page.getByLabel(copy.compose.typeAdded).check();
   await page.getByRole('radio', { name: copy.compose.separators.underscore }).check();
   const final = await page.getByTestId('phrase-preview').innerText();
   expect(final).not.toBe(plain);
@@ -163,7 +198,9 @@ test('Clear phrase warns first, then removes the phrase from the page and can st
   await expect(page.locator('.tiles .word')).toHaveCount(6);
 });
 
-const details = (page: Page) => page.locator('details.strength');
+const strength = (page: Page) => page.locator('section.strength');
+const count = (page: Page) => strength(page).locator('.count');
+const filled = (page: Page) => strength(page).locator('.dot.on');
 const caution = (page: Page) => page.locator('.guidance.caution');
 const goRemember = async (page: Page) => {
   const phrase = await page.getByTestId('phrase-preview').innerText();
@@ -171,34 +208,46 @@ const goRemember = async (page: Page) => {
   return phrase;
 };
 
-test('strength details start closed and explain the phrase from its draws, with no false precision', async ({ page, context }) => {
-  const phrase = await reachRemember(page, context);
-  await expect(details(page)).not.toHaveAttribute('open');
-  await expect(caution(page)).toHaveCount(0); // six intact words: guidance without the caution mark
-  await details(page).locator('summary').click();
-  await expect(details(page).getByText(copy.remember.strengthDraws(6, 6, '7,776'))).toBeVisible();
-  await expect(details(page).getByText(copy.remember.strengthTyped(6, 6, [...phrase].length))).toBeVisible();
-  await expect(details(page).getByText(copy.remember.strengthCaveat)).toBeVisible();
-  for (const rule of copy.remember.strengthRules) await expect(details(page).getByText(rule)).toBeVisible();
-  expect(await details(page).innerText()).not.toMatch(/\bbits?\b|crack|years|secure|2\^|\d+e\d+/i);
+test('strength shows first, as one dot per random word, the guidance and one reason, with no false precision', async ({ page, context }) => {
+  await reachRemember(page, context);
+  await expect(strength(page).getByRole('heading', { name: copy.remember.strengthTitle })).toBeVisible();
+  await expect(strength(page).locator('.dot')).toHaveCount(6);
+  await expect(filled(page)).toHaveCount(6);
+  await expect(count(page)).toHaveText(copy.remember.strengthCount(6, 6));
+  await expect(strength(page).getByText(copy.generate.guidance.recommended)).toBeVisible();
+  await expect(caution(page)).toHaveCount(0); // six random words: guidance without the caution mark
+  await expect(strength(page).getByText(copy.remember.strengthWhy('7,776'))).toBeVisible();
+  const practice = (await page.getByRole('heading', { name: copy.remember.practiceTitle }).boundingBox())!;
+  expect((await strength(page).boundingBox())!.y).toBeLessThan(practice.y);
+
+  const counts = strength(page).locator('details.counts');
+  await expect(counts).not.toHaveAttribute('open');
+  await counts.locator('summary').click();
+  for (const line of copy.remember.counts) await expect(counts.getByText(line)).toBeVisible();
+  expect(await strength(page).innerText()).not.toMatch(/\bbits?\b|crack|years|secure|2\^|\d+e\d+/i);
 });
 
-test('two joined words count as their two draws with no bonus, and editing the join removes their credit', async ({ page, context }) => {
+test('joined and dressed-up words keep counting; removing a letter loses one dot', async ({ page, context }) => {
   await reachCompose(page, context);
   const second = await field(page, 2).inputValue();
   await page.getByRole('button', { name: `${copy.compose.join}: ${second}` }).click();
-  const phrase = await goRemember(page);
-  await details(page).locator('summary').click();
-  await expect(details(page).getByText(copy.remember.strengthDraws(6, 6, '7,776'))).toBeVisible();
-  await expect(details(page).getByText(copy.remember.strengthTyped(6, 5, [...phrase].length))).toBeVisible();
+  await goRemember(page);
+  await expect(filled(page)).toHaveCount(6); // two draws, no bonus
   await expect(caution(page)).toHaveCount(0);
 
   await page.getByRole('button', { name: copy.remember.back }).click();
-  await field(page, 2).fill(`${await field(page, 2).inputValue()}9`); // the joined word
+  const joined = await field(page, 2).inputValue();
+  await field(page, 2).fill(`${joined[0].toUpperCase()}${joined.slice(1)}9`); // capital and a digit
   await goRemember(page);
+  await expect(filled(page)).toHaveCount(6);
+
+  await page.getByRole('button', { name: copy.remember.back }).click();
+  await field(page, 2).fill(joined.slice(0, -1)); // the second word loses its last letter
+  await goRemember(page);
+  await expect(filled(page)).toHaveCount(5);
+  await expect(strength(page).locator('.dot')).toHaveCount(6);
+  await expect(count(page)).toHaveText(copy.remember.strengthCount(5, 6));
   await expect(caution(page)).toHaveText(copy.generate.guidance.short);
-  await details(page).locator('summary').click();
-  await expect(details(page).getByText(copy.remember.strengthDraws(4, 6, '7,776'))).toBeVisible();
 });
 
 test('a four-word phrase carries the caution without opening the details', async ({ page, context }) => {
@@ -214,9 +263,9 @@ test('with every word rewritten, the page says it cannot estimate the strength',
   for (let n = 1; n <= 6; n++) await field(page, n).fill(`Qz${n}`);
   await goRemember(page);
   await expect(caution(page)).toHaveText(copy.generate.guidance.tooFew);
-  await details(page).locator('summary').click();
-  await expect(details(page).getByText(copy.remember.strengthNone)).toBeVisible();
-  await expect(details(page).getByText(/random words are exactly as drawn/)).toHaveCount(0);
+  await expect(filled(page)).toHaveCount(0);
+  await expect(strength(page).getByText(copy.remember.strengthNone)).toBeVisible();
+  await expect(strength(page).getByText(copy.remember.strengthWhy('7,776'))).toHaveCount(0);
 });
 
 test('Want to know more? is optional reading after the recovery copy, about managers and 2FA', async ({ page, context }) => {
@@ -238,17 +287,13 @@ test('Want to know more? is optional reading after the recovery copy, about mana
 // Checks that one phrase state drives everything: the Make it Yours counts and login checklist, then in
 // Remember the rule reminder, the strength details and the exact string practice accepts. It leaves a
 // wrong attempt behind each time, so the next visit proves an old attempt never survives a change.
-async function checkEverywhere(page: Page, s: { intact: number; typed: number; connectors: number; spaces: boolean }) {
+async function checkEverywhere(page: Page, s: { intact: number; connectors: number; spaces: boolean }) {
   const phrase = await page.getByTestId('phrase-preview').innerText();
-  const chars = [...phrase].length;
-  await expect(page.getByText(copy.compose.counts(s.intact, 6, s.connectors, chars))).toBeVisible();
   await expect(page.locator('details.requirements .status')).toHaveText(copy.requirements.summary(s.spaces ? 0 : 1, 1));
   await page.getByRole('button', { name: copy.compose.continue }).click();
   await expect(entry(page)).toHaveValue('');
   await expect(page.getByText(copy.remember.rulesUnmet(1))).toHaveCount(s.spaces ? 1 : 0);
-  await details(page).locator('summary').click();
-  await expect(details(page).getByText(copy.remember.strengthDraws(s.intact, 6, '7,776'))).toBeVisible();
-  await expect(details(page).getByText(copy.remember.strengthTyped(6, s.typed, chars))).toBeVisible();
+  await expect(count(page)).toHaveText(copy.remember.strengthCount(s.intact, 6));
   await entry(page).fill(phrase);
   await page.getByRole('button', { name: copy.remember.check, exact: true }).click();
   await expect(result(page)).toHaveText(copy.remember.match);
@@ -262,7 +307,7 @@ test('every change in Make it Yours or Generate reaches the counts, the login ch
   await reachCompose(page, context);
   await page.locator('details.requirements summary').click();
   await page.getByLabel(copy.requirements.options.noSpaces).check();
-  const seen = [await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })];
+  const seen = [await checkEverywhere(page, { intact: 6, connectors: 0, spaces: true })];
   const changed = async (s: Parameters<typeof checkEverywhere>[1]) => {
     const phrase = await checkEverywhere(page, s);
     expect(seen.at(-1)).not.toBe(phrase);
@@ -270,31 +315,32 @@ test('every change in Make it Yours or Generate reaches the counts, the login ch
   };
 
   await page.locator('[data-handle]').first().press('ArrowRight'); // reorder
-  await changed({ intact: 6, typed: 6, connectors: 0, spaces: true });
+  await changed({ intact: 6, connectors: 0, spaces: true });
   const first = await field(page, 1).inputValue();
   await page.getByRole('button', { name: `${copy.compose.join}: ${first}` }).click();
-  await changed({ intact: 6, typed: 5, connectors: 0, spaces: true });
+  await changed({ intact: 6, connectors: 0, spaces: true });
   await page.getByRole('button', { name: `${copy.compose.split}: ${await field(page, 1).inputValue()}` }).click();
-  await changed({ intact: 6, typed: 6, connectors: 0, spaces: true });
-  await field(page, 2).fill(`${await field(page, 2).inputValue()}9`); // partial edit
-  await changed({ intact: 5, typed: 6, connectors: 0, spaces: true });
+  await changed({ intact: 6, connectors: 0, spaces: true });
+  await field(page, 2).fill(`${await field(page, 2).inputValue()}9`); // dressed up: still random
+  await changed({ intact: 6, connectors: 0, spaces: true });
   await page.getByRole('button', { name: 'the', exact: true }).click();
   await page.getByRole('button', { name: copy.compose.insertHere('the', 2) }).click();
-  await changed({ intact: 5, typed: 7, connectors: 1, spaces: true });
+  await page.getByLabel(copy.compose.typeAdded).check();
+  await changed({ intact: 6, connectors: 1, spaces: true });
   await page.getByRole('radio', { name: copy.compose.separators.hyphen }).check();
-  await changed({ intact: 5, typed: 7, connectors: 1, spaces: false });
+  await changed({ intact: 6, connectors: 1, spaces: false });
   await page.getByRole('button', { name: copy.compose.remove('the') }).click();
-  await changed({ intact: 5, typed: 6, connectors: 0, spaces: false });
-  await field(page, 3).fill('Qzv'); // full rewrite
-  await changed({ intact: 4, typed: 6, connectors: 0, spaces: false });
+  await changed({ intact: 6, connectors: 0, spaces: false });
+  await field(page, 3).fill('Qzv'); // replaced
+  await changed({ intact: 5, connectors: 0, spaces: false });
 
   await page.getByRole('button', { name: copy.compose.reset }).click();
-  expect(await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })).toBe(seen[0]);
+  expect(await checkEverywhere(page, { intact: 6, connectors: 0, spaces: true })).toBe(seen[0]);
 
   await page.getByRole('button', { name: copy.compose.back }).click();
   await page.getByRole('button', { name: copy.generate.newWords }).click(); // no edits left, so no warning
   await page.getByRole('button', { name: copy.generate.continue }).click();
-  expect(await checkEverywhere(page, { intact: 6, typed: 6, connectors: 0, spaces: true })).not.toBe(seen[0]);
+  expect(await checkEverywhere(page, { intact: 6, connectors: 0, spaces: true })).not.toBe(seen[0]);
 });
 
 test('Check as I type says wrong, too short and too long as you go, in red and green, and disables Check', async ({ page, context }) => {

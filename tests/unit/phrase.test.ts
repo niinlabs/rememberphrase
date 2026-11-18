@@ -16,6 +16,9 @@ import {
   hasEdits,
   insertConnector,
   insertOwn,
+  setTypeAdded,
+  storyTexts,
+  typedTokens,
   intactRandomWords,
   move,
   origin,
@@ -148,24 +151,31 @@ describe('editing and provenance (D8, D10)', () => {
     expect(edit(six(), 'w0', 'café').tokens[0].text).toBe('café');
   });
 
-  test('origin tells unchanged, edited and user-written words apart', () => {
+  test('a word dressed up with capitals, look-alike swaps or added characters stays random (D8 as amended 2026-11-18)', () => {
     const p = six();
-    const at = (text: string) => origin(edit(p, 'w0', text), edit(p, 'w0', text).tokens[0]);
+    const at = (text: string) => edit(p, 'w0', text);
     expect(origin(p, p.tokens[0])).toBe('unchanged');
-    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES', 'map1le', 'm-a-p-l-e']) expect(at(t), t).toBe('edited');
-    const ex = generate(4, sequence('exorcism', 'orbit', 'lantern', 'velvet'));
-    expect(origin(edit(ex, 'w0', 'ex1orcism'), edit(ex, 'w0', 'ex1orcism').tokens[0])).toBe('edited'); // inserted between letters
-    for (const t of ['sunshine', 'mplae', 'map']) expect(at(t), t).toBe('rewritten');
+    for (const t of ['Maple', 'M4ple1!', 'app1e-maple', 'MAPLES', '#m@p1e', 'mAp1e7']) {
+      expect(origin(at(t), at(t).tokens[0]), t).toBe('edited');
+      expect(intactRandomWords(at(t)), t).toBe(6);
+    }
   });
 
-  test('intact random words drop with each edited word; connectors never count', () => {
-    let p = six();
-    expect(intactRandomWords(p)).toBe(6);
-    p = insertConnector(p, 'with', 2);
+  test('a replaced word, or one with letters removed or split up, no longer counts', () => {
+    const p = six();
+    for (const t of ['sunshine', 'mplae', 'map', 'mple', 'm-a-p-l-e', 'map1le']) {
+      const edited = edit(p, 'w0', t);
+      expect(origin(edited, edited.tokens[0]), t).toBe('rewritten');
+      expect(intactRandomWords(edited), t).toBe(5);
+    }
+  });
+
+  test('connectors never count, and typing the original back restores the count', () => {
+    let p = insertConnector(six(), 'with', 2);
     expect(intactRandomWords(p)).toBe(6);
     p = edit(p, 'w3', 'sunshine');
     expect(intactRandomWords(p)).toBe(5);
-    p = edit(p, 'w3', 'velvet'); // typing the original back restores intact status
+    p = edit(p, 'w3', 'velvet');
     expect(intactRandomWords(p)).toBe(6);
   });
 });
@@ -209,12 +219,15 @@ describe('combining and splitting (D12)', () => {
     expect(p.tokens).toEqual(six().tokens);
   });
 
-  test('an edited combination cannot be split and loses both intact draws', () => {
+  test('an edited combination cannot be split; each word still in it, in order, keeps counting', () => {
     const p = edit(combine(six(), 'w0'), 'w0+w1', 'MapleOrbit7');
     expect(canSplit(p, 'w0+w1')).toBe(false);
     expect(() => split(p, 'w0+w1')).toThrow(RangeError);
     expect(origin(p, p.tokens[0])).toBe('edited');
-    expect(intactRandomWords(p)).toBe(4);
+    expect(intactRandomWords(p)).toBe(6);
+    expect(intactRandomWords(edit(p, 'w0+w1', 'Maple7'))).toBe(5); // orbit is gone
+    expect(intactRandomWords(edit(p, 'w0+w1', 'orbitmaple'))).toBe(5); // out of order: only one is found after the other
+    expect(origin(p, edit(p, 'w0+w1', 'sunrise').tokens[0])).toBe('rewritten');
   });
 
   test('a word edited before joining still splits back, keeping the edit and the other intact draw', () => {
@@ -222,21 +235,21 @@ describe('combining and splitting (D12)', () => {
     expect(texts(p)[0]).toBe('Maple1orbit');
     expect(canSplit(p, 'w0+w1')).toBe(true);
     expect(origin(p, p.tokens[0])).toBe('edited');
-    expect(intactRandomWords(p)).toBe(5); // orbit is still an untouched draw
+    expect(intactRandomWords(p)).toBe(6); // Maple1 is maple, dressed up
     p = split(p, 'w0+w1');
     expect(texts(p)).toEqual(['Maple1', 'orbit', 'lantern', 'velvet', 'stork', 'delay']);
-    expect(intactRandomWords(p)).toBe(5);
+    expect(intactRandomWords(p)).toBe(6);
   });
 
-  test('joining edited words never restores credit, even when the join spells the original words', () => {
-    // As reported: "dinghy" + "geranium" edited to "dinghyg" + "eranium", then joined into "dinghygeranium".
+  test('credit follows the text: a join that holds both words whole counts both', () => {
+    // "dinghy" + "geranium" edited to "dinghyg" + "eranium": dinghy is still whole, geranium lost a letter.
     let p = generate(4, sequence('dinghy', 'geranium', 'lantern', 'velvet'));
     p = edit(edit(p, 'w0', 'dinghyg'), 'w1', 'eranium');
-    expect(intactRandomWords(p)).toBe(2);
+    expect(intactRandomWords(p)).toBe(3);
     p = combine(p, 'w0');
     expect(texts(p)[0]).toBe('dinghygeranium');
-    expect(intactRandomWords(p)).toBe(2);
-    expect(origin(p, p.tokens[0])).toBe('edited');
+    expect(intactRandomWords(p)).toBe(4); // the joined text holds both drawn words whole, in order
+    expect(origin(p, p.tokens[0])).toBe('combined'); // and reads exactly as drawn
   });
 
   test('editing a join back to its joined text restores only what the parts had', () => {
@@ -268,7 +281,7 @@ describe('connectors, separators, reset and the exact string (D10, D11)', () => 
   });
 
   test('every separator produces the exact string', () => {
-    const p = insertConnector(combine(six(), 'w0'), 'in', 1);
+    const p = setTypeAdded(insertConnector(combine(six(), 'w0'), 'in', 1), true);
     expect(phraseText(p)).toBe('mapleorbit in lantern velvet stork delay');
     expect(phraseText(setSeparator(p, 'hyphen'))).toBe('mapleorbit-in-lantern-velvet-stork-delay');
     expect(phraseText(setSeparator(p, 'period'))).toBe('mapleorbit.in.lantern.velvet.stork.delay');
@@ -308,16 +321,16 @@ describe('decoration (D9 as clarified 2026-10-25)', () => {
     const p = setSeparator(six(), 'hyphen');
     expect(phraseText(decorate(p, { capitalise: 'first' }))).toBe('Maple-orbit-lantern-velvet-stork-delay');
     expect(phraseText(decorate(p, { capitalise: 'every', digit: '7', symbol: '!' }))).toBe('Maple-Orbit-Lantern-Velvet-Stork-Delay7!');
-    const withConnector = insertConnector(p, 'the', 0);
+    const withConnector = setTypeAdded(insertConnector(p, 'the', 0), true);
     expect(phraseText(decorate(withConnector, { capitalise: 'first' }))).toBe('The-maple-orbit-lantern-velvet-stork-delay');
     expect(phraseText(decorate(edit(p, 'w0', '9lives'), { capitalise: 'every' }))).toMatch(/^9lives-Orbit/);
   });
 
-  test('decoration keeps every intact random word, unlike typing the same change into a word', () => {
+  test('decoration keeps every random word, as the same change typed by hand does', () => {
     const decorated = decorate(six(), { capitalise: 'every', digit: '3', symbol: '#' });
     expect(intactRandomWords(decorated)).toBe(6);
     expect(texts(decorated)).toEqual(texts(six()));
-    expect(intactRandomWords(edit(six(), 'w0', 'Maple'))).toBe(5);
+    expect(intactRandomWords(edit(six(), 'w0', 'Maple'))).toBe(6); // the same change typed by hand also keeps it
   });
 
   test('decoration counts as a change: Reset and lowering the count remove it, raising keeps it', () => {
@@ -362,10 +375,29 @@ describe('removing words and the Nothing separator (2026-11-05)', () => {
   });
 });
 
+describe('typing the added words (D11 as amended 2026-11-17)', () => {
+  test('connecting and own words are left out of the typed phrase unless the user chooses to type them', () => {
+    const p = insertOwn(insertConnector(decorate(six(), { capitalise: 'first' }), 'the', 0), 'zebra', 7);
+    expect(p.typeAdded).toBe(false);
+    expect(phraseText(p)).toBe('Maple orbit lantern velvet stork delay');
+    expect(typedTokens(p)).toHaveLength(6);
+    const typed = setTypeAdded(p, true);
+    expect(phraseText(typed)).toBe('The maple orbit lantern velvet stork delay zebra');
+    expect(typedTokens(typed)).toHaveLength(8);
+    expect(intactRandomWords(typed)).toBe(intactRandomWords(p));
+    expect(hasEdits(setTypeAdded(six(), true))).toBe(true);
+    expect(reset(typed).typeAdded).toBe(false);
+    // The story shows every word cased as typed; untyped added words take capitals only from Every word.
+    expect(storyTexts(p).join(' ')).toBe('the Maple orbit lantern velvet stork delay zebra');
+    expect(storyTexts(typed).join(' ')).toBe(phraseText(typed));
+    expect(storyTexts(decorate(p, { capitalise: 'every' })).join(' ')).toBe('The Maple Orbit Lantern Velvet Stork Delay Zebra');
+  });
+});
+
 describe('your own words (D11 as amended 2026-11-05)', () => {
   test('an own word goes where it is put, can be edited and removed, and never counts as random', () => {
     let p = insertOwn(six(), 'my 2nd!', 2);
-    expect(phraseText(p)).toBe('maple orbit my 2nd! lantern velvet stork delay');
+    expect(phraseText(setTypeAdded(p, true))).toBe('maple orbit my 2nd! lantern velvet stork delay');
     expect(intactRandomWords(p)).toBe(6);
     expect(drawsInPhrase(p)).toBe(6);
     expect(origin(p, p.tokens[2])).toBe('own');

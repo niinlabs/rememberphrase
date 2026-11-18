@@ -34,7 +34,8 @@ export type Token =
   // D11 as amended 2026-11-05: free text the user adds; like a connector it is never a random draw.
   | { kind: 'own'; id: string; text: string };
 // slots in generated order are the reset baseline; tokens and separator are the step-3 draft.
-export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; decoration: Decoration; nextId: number };
+// typeAdded: connecting words and your own words are typed too; off (the default), they only help recall.
+export type Phrase = { slots: Slot[]; tokens: Token[]; separator: Separator; decoration: Decoration; typeAdded: boolean; nextId: number };
 
 export type Origin = 'unchanged' | 'combined' | 'edited' | 'rewritten' | 'connector' | 'own';
 export type WordError = 'empty' | 'too-long' | 'control' | 'edge-space';
@@ -52,6 +53,7 @@ const baseline = (p: Phrase, slots = p.slots): Phrase => ({
   tokens: slots.map(wordToken),
   separator: 'space',
   decoration: NO_DECORATION,
+  typeAdded: false,
 });
 
 function checkCount(count: number) {
@@ -71,7 +73,7 @@ function indexOf(p: Phrase, tokenId: string) {
 export function generate(count: number, draw: Draw): Phrase {
   checkCount(count);
   const slots = Array.from({ length: count }, (_, id) => ({ id, word: draw(), locked: false }));
-  return baseline({ slots, tokens: [], separator: 'space', decoration: NO_DECORATION, nextId: count });
+  return baseline({ slots, tokens: [], separator: 'space', decoration: NO_DECORATION, typeAdded: false, nextId: count });
 }
 
 export const canReroll = (p: Phrase) => p.slots.some((s) => !s.locked);
@@ -125,6 +127,7 @@ export const reset = (p: Phrase): Phrase => baseline(p);
 
 export const hasEdits = (p: Phrase) =>
   p.separator !== 'space' ||
+  p.typeAdded ||
   JSON.stringify(p.decoration) !== JSON.stringify(NO_DECORATION) ||
   JSON.stringify(p.tokens) !== JSON.stringify(p.slots.map(wordToken));
 
@@ -248,44 +251,61 @@ export function decorate(p: Phrase, change: Partial<Decoration>): Phrase {
   return { ...p, decoration };
 }
 
+export const setTypeAdded = (p: Phrase, typeAdded: boolean): Phrase => ({ ...p, typeAdded });
+// The tokens the user types: random words only, unless they chose to type the added words too.
+export const typedTokens = (p: Phrase) => p.tokens.filter((t) => p.typeAdded || t.kind === 'word');
+
 const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-// The exact string the user will type: what the preview shows and practice compares against.
-export function phraseText(p: Phrase) {
-  const { capitalise, digit, symbol } = p.decoration;
-  const texts = p.tokens.map((t, i) => (capitalise === 'every' || (capitalise === 'first' && i === 0) ? capitalised(t.text) : t.text));
-  return texts.join(SEPARATORS[p.separator]) + (digit ?? '') + (symbol ?? '');
+// Each typed token's text with the chosen capitals, in typed order.
+function typedTexts(p: Phrase) {
+  const { capitalise } = p.decoration;
+  return typedTokens(p).map((t, i) => (capitalise === 'every' || (capitalise === 'first' && i === 0) ? capitalised(t.text) : t.text));
 }
+
+// Every token in order, typed ones exactly as typed; added words that are not typed get capitals only
+// from Every word, so the story never shows a capital the typed phrase does not have.
+export function storyTexts(p: Phrase) {
+  const typed = typedTexts(p);
+  const at = new Map(typedTokens(p).map((t, i) => [t.id, typed[i]]));
+  return p.tokens.map((t) => at.get(t.id) ?? (p.decoration.capitalise === 'every' ? capitalised(t.text) : t.text));
+}
+
+// The exact string the user will type: what the preview shows and practice compares against.
+export const phraseText = (p: Phrase) =>
+  typedTexts(p).join(SEPARATORS[p.separator]) + (p.decoration.digit ?? '') + (p.decoration.symbol ?? '');
 
 // --- Provenance (D8) -----------------------------------------------------------------------
 
-// Familiar substitutions still count as the same letter when judging whether a word was edited.
+// Familiar look-alike swaps still count as the same letter.
 const LOOKALIKES: Record<string, string> = { a: 'a4@', e: 'e3', i: 'i1!', l: 'l1', o: 'o0', s: 's5$', t: 't7' };
 const escape = (c: string) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const pattern = (word: string) => [...word.toLowerCase()].map((c) => (LOOKALIKES[c] ? `[${escape(LOOKALIKES[c])}]` : escape(c))).join('');
 
-// Approved rule (WP02, 2026-10-24): "edited" means the original letters are still there in order,
-// allowing case changes, familiar substitutions and characters added anywhere (before, after or
-// between them); anything else counts as user-written. Strength (D8) is unaffected: both lose intact status.
-function stillRecognisable(text: string, original: string) {
-  const letters = [...original.toLowerCase()].map((c) => (LOOKALIKES[c] ? `[${escape(LOOKALIKES[c])}]` : escape(c)));
-  return new RegExp(letters.join('.*?'), 'isu').test(text);
-}
-
-// How many random draws behind a token are still exactly as drawn. A joined word is judged only by
-// the parts saved when it was joined, and only while its text is unchanged since joining: typing a
-// join that happens to spell the original words never restores credit lost before joining.
-function intactDraws(p: Phrase, token: Token) {
+// D8 as amended 2026-11-18: a draw still counts as random while its word is in the text in one piece,
+// allowing capitals and look-alike swaps, with anything added before or after it. Dressing a word up
+// does not make it less random; replacing it, removing letters or splitting it up does. The words of
+// a join are looked for in order, each after the previous one.
+function randomDraws(p: Phrase, token: Token) {
   if (token.kind !== 'word') return 0;
-  if (!token.parts) return token.text === originalText(p, token) ? 1 : 0;
-  if (token.text !== token.parts.join('')) return 0;
-  return token.slots.filter((id, k) => token.parts![k] === slotWord(p, id)).length;
+  let from = 0;
+  let found = 0;
+  for (const id of token.slots) {
+    const re = new RegExp(pattern(slotWord(p, id)), 'giu');
+    re.lastIndex = from;
+    const match = re.exec(token.text);
+    if (!match) continue;
+    found++;
+    from = match.index + match[0].length;
+  }
+  return found;
 }
 
 export function origin(p: Phrase, token: Token): Origin {
   if (token.kind !== 'word') return token.kind;
-  if (intactDraws(p, token) === token.slots.length) return token.parts ? 'combined' : 'unchanged';
-  return stillRecognisable(token.text, originalText(p, token)) ? 'edited' : 'rewritten';
+  if (token.text === originalText(p, token)) return token.parts ? 'combined' : 'unchanged';
+  return randomDraws(p, token) > 0 ? 'edited' : 'rewritten';
 }
 
-// D8: random draws whose text is unchanged, counted through intactDraws.
-export const intactRandomWords = (p: Phrase) => p.tokens.reduce((n, t) => n + intactDraws(p, t), 0);
+// D8: random draws that still count, through randomDraws.
+export const intactRandomWords = (p: Phrase) => p.tokens.reduce((n, t) => n + randomDraws(p, t), 0);

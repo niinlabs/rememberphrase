@@ -60,7 +60,6 @@ test('stated rules are checked, and the fit controls meet them without losing ra
   await expect(preview(page)).toHaveText(expected);
   await expect(status(page)).toHaveText(copy.requirements.summary(4, 4));
   for (const li of await checklist(page).all()) await expect(li).toContainText(copy.requirements.met);
-  await expect(page.getByText(copy.compose.counts(6, 6, 0, [...expected].length))).toBeVisible();
   await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0);
   await expect(field(page, 1)).toHaveValue(words[0]); // the word itself is untouched
 });

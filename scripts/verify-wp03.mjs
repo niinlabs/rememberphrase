@@ -9,10 +9,10 @@ const BROWSERS = ['chromium', 'firefox', 'webkit'];
 check('WP02 holds', () => upstream('scripts/verify-wp02.mjs', 'WP02'));
 // Minimum passing tests per file (per browser for browser tests): fewer means fixtures were lost.
 check('policy, decoration and copy fixtures pass', () =>
-  unitFixtures({ 'tests/unit/policy.test.ts': 6, 'tests/unit/phrase.test.ts': 40, 'tests/unit/copy.test.ts': 20 }),
+  unitFixtures({ 'tests/unit/policy.test.ts': 6, 'tests/unit/phrase.test.ts': 41, 'tests/unit/copy.test.ts': 20 }),
 );
 check(`Remember and login-requirements browser fixtures pass in ${BROWSERS.join(', ')}`, () =>
-  browserFixtures({ 'tests/e2e/remember.e2e.ts': 18, 'tests/e2e/requirements.e2e.ts': 7 }, BROWSERS),
+  browserFixtures({ 'tests/e2e/remember.e2e.ts': 19, 'tests/e2e/requirements.e2e.ts': 7 }, BROWSERS),
 );
 check('device, screen-reader, copy and security reviews are recorded', () => manualRecord('docs/evidence/wp03-manual.md'));
 

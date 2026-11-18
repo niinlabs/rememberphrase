@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { copy, guidanceFor } from '../copy';
-  import { drawsInPhrase, intactRandomWords, phraseText, type Phrase } from '../core/phrase';
+  import { drawsInPhrase, intactRandomWords, phraseText, storyTexts, type Phrase } from '../core/phrase';
   import { checkRules, type Rules } from '../core/policy';
   import Icon from './Icon.svelte';
   import WarnDialog from './WarnDialog.svelte';
@@ -24,7 +24,7 @@
 
   // All practice state is local, so leaving this step (to edit the phrase, or on a reconnection)
   // destroys it: an attempt never outlives the phrase it was typed for (D13).
-  let revealed = $state(false);
+  let revealed = $state<'phrase' | 'hint' | null>(null); // the phrase, or its words masked between the connecting words
   let attempt = $state('');
   let masked = $state(true);
   let result = $state<'match' | 'mismatch' | null>(null);
@@ -35,6 +35,10 @@
   const text = $derived(phrase ? phraseText(phrase) : '');
   const intact = $derived(phrase ? intactRandomWords(phrase) : 0);
   const drawn = $derived(phrase ? drawsInPhrase(phrase) : 0); // removed words no longer count as drawn
+  const hasAdded = $derived(!!phrase?.tokens.some((t) => t.kind !== 'word'));
+  // The hint's words cased as in the full story under the phrase in Make it yours.
+  const story = $derived(phrase ? storyTexts(phrase) : []);
+  const toggle = (which: 'phrase' | 'hint') => (revealed = revealed === which ? null : which);
   const unmet = $derived(checkRules(text, rules).filter((c) => !c.met).length);
 
   // Exact comparison with the string the preview showed, so case, separators and symbols all count.
@@ -68,7 +72,7 @@
   async function clear() {
     clearOpen = false;
     forget();
-    revealed = false;
+    revealed = null;
     onclear();
     await tick();
     document.getElementById('page-title')?.focus();
@@ -88,11 +92,26 @@
   </div>
 {:else}
   <p class="intro">{copy.remember.intro}</p>
-  <!-- D4: shorter phrases get a caution mark so the warning cannot be missed; the details stay optional. -->
-  <p class="guidance" class:caution={intact <= 5}>
-    {#if intact <= 5}<Icon name="caution" size={20} />{/if}
-    {guidanceFor(intact)}
-  </p>
+  <!-- D8 as amended 2026-11-18: one dot per random draw in the phrase, filled while it still counts. -->
+  <section class="strength" aria-labelledby="strength-title">
+    <h2 id="strength-title">{copy.remember.strengthTitle}</h2>
+    <p class="count">
+      <span class="dots" aria-hidden="true">{#each { length: drawn }, i (i)}<span class="dot" class:on={i < intact}></span>{/each}</span>
+      {copy.remember.strengthCount(intact, drawn)}
+    </p>
+    <!-- D4: shorter phrases get a caution mark so the warning cannot be missed. -->
+    <p class="guidance" class:caution={intact <= 5}>
+      {#if intact <= 5}<Icon name="caution" size={20} />{/if}
+      {guidanceFor(intact)}
+    </p>
+    <p>{intact === 0 ? copy.remember.strengthNone : copy.remember.strengthWhy(listSize.toLocaleString('en'))}</p>
+    <details class="counts">
+      <summary>{copy.remember.countsTitle}</summary>
+      <ul class="tips">
+        {#each copy.remember.counts as line (line)}<li>{line}</li>{/each}
+      </ul>
+    </details>
+  </section>
 
   {#if unmet}
     <p class="unmet">
@@ -113,11 +132,26 @@
     <p class="help">{copy.remember.practiceIntro}</p>
 
     <!-- The reference is hidden while recalling and is only shown on request, never announced by itself. -->
-    <button class="button secondary reveal" aria-expanded={revealed} aria-controls="reference" onclick={() => (revealed = !revealed)}>
-      {revealed ? copy.remember.hidePhrase : copy.remember.showPhrase}
-    </button>
+    <div class="reveals">
+      <button class="button secondary reveal" aria-expanded={revealed === 'phrase'} aria-controls="reference" onclick={() => toggle('phrase')}>
+        {revealed === 'phrase' ? copy.remember.hidePhrase : copy.remember.showPhrase}
+      </button>
+      {#if hasAdded}
+        <button class="button secondary reveal" aria-expanded={revealed === 'hint'} aria-controls="reference" onclick={() => toggle('hint')}>
+          {revealed === 'hint' ? copy.remember.hideHint : copy.remember.showHint}
+        </button>
+      {/if}
+    </div>
     <div id="reference">
-      {#if revealed}<p class="phrase" data-testid="reference-phrase">{text}</p>{/if}
+      {#if revealed === 'phrase'}<p class="phrase" data-testid="reference-phrase">{text}</p>{/if}
+      <!-- The connecting and own words in clear, each random word as one star per character. -->
+      {#if revealed === 'hint'}
+        <p class="phrase" data-testid="reference-hint">
+          {#each phrase.tokens as token, i (token.id)}{i > 0 ? ' ' : ''}{#if token.kind === 'word'}<span aria-hidden="true"
+                >{'*'.repeat([...token.text].length)}</span
+              ><span class="visually-hidden">{copy.remember.hiddenWord([...token.text].length)}</span>{:else}{story[i]}{/if}{/each}
+        </p>
+      {/if}
     </div>
 
     <label class="field" for="attempt">{copy.remember.attemptLabel}</label>
@@ -183,16 +217,6 @@
     </ul>
   </section>
 
-  <details class="strength">
-    <summary>{copy.remember.strengthTitle}</summary>
-    <p>{intact === 0 ? copy.remember.strengthNone : copy.remember.strengthDraws(intact, drawn, listSize.toLocaleString('en'))}</p>
-    <p>{copy.remember.strengthTyped(drawn, phrase.tokens.length, [...text].length)}</p>
-    <p>{copy.remember.strengthCaveat}</p>
-    <ul class="tips">
-      {#each copy.remember.strengthRules as rule (rule)}<li>{rule}</li>{/each}
-    </ul>
-  </details>
-
   <!-- Optional reading: it never holds back practice, recovery or the caution above. -->
   <details class="more">
     <summary>{copy.remember.moreTitle}</summary>
@@ -245,6 +269,9 @@
     margin: 0;
     font-weight: 650;
   }
+  .guidance :global(svg) {
+    flex: none; /* keeps the caution mark full size when the text wraps */
+  }
   .guidance.caution {
     margin-top: 0.4rem;
     padding: 0.6rem 0.9rem;
@@ -269,7 +296,6 @@
     text-underline-offset: 3px;
     cursor: pointer;
   }
-  .strength,
   .more {
     margin-top: 1.2rem;
   }
@@ -288,6 +314,34 @@
   }
   .strength .tips {
     margin-top: 0.5rem;
+  }
+  .count {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.7rem;
+    font-weight: 750;
+  }
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  /* Navy and yellow only: red, amber and green belong to the connection band. */
+  .dot {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--navy-900);
+    border-radius: 50%;
+  }
+  .dot.on {
+    background: var(--yellow);
+  }
+  .counts {
+    margin-top: 0.6rem;
+  }
+  .counts summary {
+    font-size: 1rem;
   }
   h2 {
     margin: 1.4rem 0 0.4rem;
@@ -314,8 +368,13 @@
   .practice h2 {
     margin-top: 0.9rem;
   }
-  .reveal {
+  .reveals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
     margin-top: 0.8rem;
+  }
+  .reveal {
     min-height: 2.75rem;
     font-size: 1rem;
   }
@@ -329,6 +388,14 @@
     font-weight: 750;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .field {
     display: block;

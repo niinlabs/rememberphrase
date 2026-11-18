@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { copy, guidanceFor } from '../copy';
+  import { copy } from '../copy';
   import type { Status } from '../core/status';
   import {
     canCombine,
@@ -24,7 +24,9 @@
     reset,
     SEPARATORS,
     setSeparator,
+    setTypeAdded,
     split,
+    storyTexts,
     wordError,
     wordLimit,
     type Connector,
@@ -83,6 +85,31 @@
     document.documentElement.style.scrollPaddingTop = !previewInView && barHeight ? `${barHeight + 8}px` : '';
     return () => (document.documentElement.style.scrollPaddingTop = '');
   });
+  // A tile takes two columns only when its word does not fit a one-column field. Measured rather than
+  // counted, as letters differ in width and the column width changes with the screen.
+  let fieldRoom = $state(Infinity); // text width a one-column word field shows, in px
+  let fieldFont = $state('');
+  let measurer: CanvasRenderingContext2D | null = null;
+  $effect(() => {
+    const update = () => {
+      const input = list.querySelector<HTMLInputElement>(':scope > li.token input');
+      if (!input) return;
+      const s = getComputedStyle(input);
+      fieldFont = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+      const textWidth = input.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+      const column = parseFloat(getComputedStyle(list).gridTemplateColumns);
+      fieldRoom = column - (input.closest('li')!.offsetWidth - textWidth);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(list);
+    return () => observer.disconnect();
+  });
+  function tooWide(text: string) {
+    measurer ??= document.createElement('canvas').getContext('2d');
+    if (!measurer) return [...text].length > 10;
+    measurer.font = fieldFont;
+    return measurer.measureText(text).width + 4 > fieldRoom; // room for the caret and the browsers' rounding
+  }
   let pointerStart = { x: 0, y: 0, moved: false };
   let pointer = $state({ x: 0, y: 0 });
   let ghost = $state<HTMLElement>();
@@ -105,6 +132,8 @@
   });
 
   const text = $derived(phraseText(phrase));
+  // The full story, shown under the phrase while connecting and own words are left out of it.
+  const story = $derived(storyTexts(phrase));
   const intact = $derived(intactRandomWords(phrase));
   const connectorCount = $derived(phrase.tokens.filter((t) => t.kind === 'connector').length);
   const ownCount = $derived(phrase.tokens.filter((t) => t.kind === 'own').length);
@@ -119,7 +148,6 @@
     announcement = copy.compose.ownAdded(ownDraft);
     ownDraft = '';
   }
-  const guidance = $derived(guidanceFor(intact));
   const separators = Object.keys(SEPARATORS) as Separator[];
   const sameItem = (a: Item | null, b: Item) =>
     !!a && a.kind === b.kind && (a.kind === 'token' ? a.id === (b as typeof a).id : a.text === (b as typeof a).text);
@@ -266,8 +294,15 @@
 <section class="preview" aria-labelledby="preview-title" bind:this={previewBox}>
   <h2 id="preview-title">{copy.compose.previewLabel}</h2>
   <p class="phrase" data-testid="phrase-preview">{text}</p>
-  <p class="counts">{copy.compose.counts(intact, drawn, connectorCount, [...text].length, ownCount)}</p>
-  <p class="guidance">{guidance}</p>
+  {#if !phrase.typeAdded && connectorCount + ownCount > 0}
+    <p class="story-label">{copy.compose.storyLabel}</p>
+    <!-- Separators and the end decoration are written out, as Svelte drops whitespace between elements. -->
+    <p class="story" data-testid="story-preview">
+      {#each story as word, i (i)}{i > 0 ? SEPARATORS[phrase.separator] : ''}<span class:added={phrase.tokens[i].kind !== 'word'}
+          >{word}</span
+        >{/each}{phrase.decoration.digit ?? ''}{phrase.decoration.symbol ?? ''}
+    </p>
+  {/if}
   {#if intact < drawn}<p class="note">{copy.compose.editedNote}</p>{/if}
   {#if /[^\x20-\x7e]/.test(text)}<p class="note warn">{copy.compose.keyboardNote}</p>{/if}
 </section>
@@ -307,7 +342,7 @@
     {/if}
     <li
       class="token {token.kind} origin-{o}"
-      class:wide={[...token.text].length > 10}
+      class:wide={token.kind !== 'connector' && tooWide(token.text)}
       class:selected={sameItem(placing, item)}
       class:placeholder={dragOrder !== null && token.id === draggedId}
       style:order={dragOrder?.get(token.id)}
@@ -408,6 +443,16 @@
 
 <section class="tray" aria-labelledby="tray-title">
   <h2 id="tray-title">{copy.compose.connectorsTitle}</h2>
+  <p id="type-added-help">{copy.compose.typeAddedHelp}</p>
+  <label class="type-added">
+    <input
+      type="checkbox"
+      checked={phrase.typeAdded}
+      aria-describedby="type-added-help"
+      onchange={(e) => (phrase = setTypeAdded(phrase, e.currentTarget.checked))}
+    />
+    {copy.compose.typeAdded}
+  </label>
   <ul>
     {#each CONNECTORS as c (c)}
       {@const item: Item = { kind: 'connector', text: c }}
@@ -548,7 +593,7 @@
     background: var(--cream);
     transition: box-shadow 140ms;
   }
-  /* Long words get two columns so the whole word stays visible in its field. */
+  /* Words too long for one column get two, so the whole word stays visible in its field. */
   .token.wide {
     grid-column: span 2;
   }
@@ -798,8 +843,38 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .counts,
-  .guidance,
+  .story-label {
+    margin: 0.6rem 0 0;
+    font-size: 0.8rem;
+    font-weight: 750;
+    color: var(--yellow);
+  }
+  .story {
+    margin: 0.1rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 650;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* Connecting and own words set apart, as in the examples on the introduction. */
+  .story .added {
+    font-weight: 450;
+    color: #b9c3da;
+  }
+  .type-added {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0.5rem 0 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .type-added input {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--navy-900);
+  }
   .note {
     margin: 0.45rem 0 0;
     font-size: 0.92rem;

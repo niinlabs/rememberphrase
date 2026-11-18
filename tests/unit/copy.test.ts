@@ -73,26 +73,25 @@ test('only approved languages are offered, each with a reviewed and attributed l
 });
 
 // WP03 copy fixtures: strength (D4, D8), login requirements (D9) and practice and recovery (D13).
-test('the D4 guidance and the D8 caveat use the approved wording', () => {
+test('the D4 guidance and the D8 wording for rewritten phrases are as approved', () => {
   expect(copy.generate.guidance).toEqual({
     tooFew: 'Too few random words for an important password.',
     short: 'Shorter than we recommend for a master password or computer login.',
     recommended: 'The length we recommend for a master password or computer login.',
   });
-  expect(copy.remember.strengthCaveat).toBe(
-    'Based on how these words were generated. You chose which words to keep and their order; we do not count that as extra strength.',
-  );
   expect(copy.remember.strengthNone).toBe('We cannot estimate the strength of words you wrote yourself.');
 });
 
-test('strength copy counts words and characters, never combinations or time', () => {
-  const text = [copy.remember.strengthDraws(5, 6, '7,776'), copy.remember.strengthTyped(6, 5, 40), ...copy.remember.strengthRules].join(' ');
+test('strength copy gives one count and one reason, never combinations or time', () => {
+  const text = [copy.remember.strengthCount(5, 6), copy.remember.strengthWhy('7,776'), ...copy.remember.counts].join(' ');
   expect(text).not.toMatch(/\b(combinations?|possibilit\w+|years?|days?|seconds?|guess\w*)\b|\d[\d,]* ?(x|×) ?\d/i);
-  expect(copy.remember.strengthRules.join(' ')).toMatch(/do not add strength/);
-  // Hand edits do change the guidance (an edited word stops counting), so only the D9 options may be named.
-  const unchanged = copy.remember.strengthRules.find((r) => r.includes('do not change the guidance'))!;
-  expect(unchanged).toContain('the Capitalise, Add a number and Add a symbol options');
-  expect(unchanged).not.toMatch(/\b(capitals|digits|symbols)\b/);
+  expect(copy.remember.strengthCount(6, 6)).toBe('6 random words');
+  expect(copy.remember.strengthCount(5, 6)).toBe('5 of 6 words still random');
+  // D8 as amended 2026-11-18: dressing a word up keeps it random; replacing it or removing letters does not.
+  const [counts, doesNot, noStrength] = copy.remember.counts;
+  expect(counts).toMatch(/capitals.*look-alike swaps.*added/);
+  expect(doesNot).toContain('replaced or removed letters from');
+  expect(noStrength).toContain('the Capitalise, Add a number and Add a symbol options');
 });
 
 test('login requirements default to not specified and never promise acceptance', () => {
@@ -100,7 +99,7 @@ test('login requirements default to not specified and never promise acceptance',
   const text = strings(copy.requirements).join(' ');
   expect(text).not.toMatch(/\b(will (be )?accept\w*|accepted|approved|compliant|guaranteed)\b/i);
   expect(copy.requirements.otherRules).toContain('may have other rules');
-  expect(copy.requirements.fitNote).toContain("don't change how many random words count");
+  expect(copy.requirements.fitNote).toContain("don't necessarily make a passphrase stronger");
 });
 
 test('practice copy says the attempt stays in the tab and names what is outside the page', () => {
@@ -176,8 +175,9 @@ test('continuing while connected names the risk plainly and never sounds like an
 
 test('wording from the review of 2026-11-05, second round', () => {
   expect(copy.tagline).toBe('Random start. Your story. A passphrase you can remember.');
+  // Updated with D8 on 2026-11-18: dressing a word up keeps it random.
   expect(copy.landing.edit.at(-1)).toBe(
-    'Editing, replacing or removing a word may make it less random. With fewer random words left, the phrase may be easier to guess.',
+    'Replacing a word, removing letters from it or removing it makes your phrase less random. Capitals, look-alike swaps like 3 for e and added characters keep a word random. With fewer random words left, the phrase may be easier to guess.',
   );
   expect([...CONNECTORS]).toEqual([...CONNECTORS].sort());
   expect(CONNECTORS).toContain('an');

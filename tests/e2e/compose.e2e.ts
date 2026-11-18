@@ -5,6 +5,7 @@ import { startAtStep1 } from './start';
 
 // WP02 slice 3 browser fixtures: Make it Yours.
 const preview = (page: Page) => page.getByTestId('phrase-preview');
+const story = (page: Page) => page.getByTestId('story-preview');
 const tiles = (page: Page) => page.getByRole('list', { name: copy.compose.tilesLabel }).locator('li.token');
 const handle = (page: Page, text: string) => page.getByRole('button', { name: copy.compose.handle(text), exact: true });
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
@@ -49,7 +50,6 @@ test('the preview starts as the generated words, in order, separated by spaces',
   const words = await reachCompose(page, context);
   await expect(preview(page)).toHaveText(words.join(' '));
   await expect(tiles(page)).toHaveCount(6);
-  await expect(page.getByText(copy.compose.counts(6, 6, 0, words.join(' ').length))).toBeVisible();
   await expect(page.getByRole('button', { name: copy.compose.reset })).toBeDisabled();
 });
 
@@ -69,10 +69,11 @@ test('editing a word updates the preview and its origin; invalid edits are refus
   await first.fill(`${words[0].toUpperCase()}1!`);
   await expect(preview(page)).toHaveText([`${words[0].toUpperCase()}1!`, ...words.slice(1)].join(' '));
   await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
-  await expect(page.getByText(copy.compose.editedNote)).toBeVisible();
+  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0); // dressed up, still random (D8 as amended)
 
   await first.fill('zzqx');
   await expect(tiles(page).first()).toContainText(copy.compose.origin.rewritten);
+  await expect(page.getByText(copy.compose.editedNote)).toBeVisible();
 
   await first.fill('');
   await expect(page.getByText(copy.compose.wordErrors.empty)).toBeVisible();
@@ -112,7 +113,6 @@ test('two words join into one and split back; an edited join cannot be split', a
   await page.getByRole('button', { name: `${copy.compose.join}: ${words[0]}` }).click();
   await expect(preview(page)).toHaveText([words[0] + words[1], ...words.slice(2)].join(' '));
   await expect(tiles(page).first()).toContainText(copy.compose.origin.combined);
-  await expect(page.getByText(copy.compose.counts(6, 6, 0, (words[0] + words[1] + ' ' + words.slice(2).join(' ')).length))).toBeVisible();
   await page.getByRole('button', { name: `${copy.compose.split}: ${words[0] + words[1]}` }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
 
@@ -124,17 +124,38 @@ test('two words join into one and split back; an edited join cannot be split', a
 test('connecting words insert by selecting or dragging, never count as random, and can be removed', async ({ page, context }) => {
   await page.setViewportSize({ width: 1280, height: 1000 }); // the tray and the tiles both in view, as when a user drags
   const words = await reachCompose(page, context);
+  await expect(story(page)).toHaveCount(0); // nothing added yet
   const tray = page.getByRole('region', { name: copy.compose.connectorsTitle });
   await tray.getByRole('button', { name: 'with', exact: true }).click();
   await page.getByRole('button', { name: copy.compose.insertHere('with', 2) }).click();
-  await expect(preview(page)).toHaveText([words[0], 'with', ...words.slice(1)].join(' '));
+  await expect(story(page)).toHaveText([words[0], 'with', ...words.slice(1)].join(' '));
 
   await dragTo(page, tray.getByRole('button', { name: 'under', exact: true }), tiles(page).nth(4));
-  await expect(preview(page)).toHaveText([words[0], 'with', words[1], words[2], 'under', ...words.slice(3)].join(' '));
-  await expect(page.getByText(/^6 of 6 random words unchanged · 2 connecting words/)).toBeVisible();
+  const withBoth = [words[0], 'with', words[1], words[2], 'under', ...words.slice(3)].join(' ');
+  await expect(story(page)).toHaveText(withBoth);
+  await expect(story(page).locator('.added')).toHaveText(['with', 'under']); // set apart from the random words
 
   await page.getByRole('button', { name: copy.compose.remove('with') }).click();
-  await expect(preview(page)).toHaveText([words[0], words[1], words[2], 'under', ...words.slice(3)].join(' '));
+  await expect(story(page)).toHaveText([words[0], words[1], words[2], 'under', ...words.slice(3)].join(' '));
+});
+
+test('connecting words only help recall unless the user chooses to type them; the story stays under the phrase', async ({ page, context }) => {
+  const words = await reachCompose(page, context);
+  const typeAdded = page.getByLabel(copy.compose.typeAdded);
+  await expect(typeAdded).not.toBeChecked();
+  await page.getByRole('region', { name: copy.compose.connectorsTitle }).getByRole('button', { name: 'and', exact: true }).click();
+  await page.getByRole('button', { name: copy.compose.insertHere('and', 2) }).click();
+  const withAnd = [words[0], 'and', ...words.slice(1)].join(' ');
+  await expect(preview(page)).toHaveText(words.join(' '));
+  await expect(story(page)).toHaveText(withAnd);
+
+  await typeAdded.check();
+  await expect(preview(page)).toHaveText(withAnd);
+  await expect(story(page)).toHaveCount(0); // the phrase itself now shows them
+
+  await page.getByRole('button', { name: copy.compose.reset }).click();
+  await expect(typeAdded).not.toBeChecked();
+  await expect(story(page)).toHaveCount(0);
 });
 
 test('every separator changes the exact string', async ({ page, context }) => {
@@ -240,18 +261,16 @@ test('a word edited before joining can still be split, keeping the edit', async 
   await expect(preview(page)).toHaveText([`${words[0]}1`, ...words.slice(1)].join(' '));
 });
 
-test('joining edited words that spell the original never restores random-word credit', async ({ page, context }) => {
+test('joining words whose letters were moved between them reads as the two drawn words again (D8 as amended)', async ({ page, context }) => {
   const words = await reachCompose(page, context);
   // Move the second word's first letter onto the first word, as in "dinghyg" + "eranium".
   await field(page, 1).fill(words[0] + words[1][0]);
   await field(page, 2).fill(words[1].slice(1));
   const joined = words[0] + words[1];
-  const length = [joined, ...words.slice(2)].join(' ').length;
-  await expect(page.getByText(copy.compose.counts(4, 6, 0, words.join(' ').length))).toBeVisible();
   await page.getByRole('button', { name: `${copy.compose.join}: ${words[0] + words[1][0]}` }).click();
   await expect(preview(page)).toHaveText([joined, ...words.slice(2)].join(' '));
-  await expect(page.getByText(copy.compose.counts(4, 6, 0, length))).toBeVisible();
-  await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
+  await expect(tiles(page).first()).toContainText(copy.compose.origin.combined);
+  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0);
 });
 
 test('an invalid edit on its own can be reset', async ({ page, context }) => {
@@ -264,10 +283,11 @@ test('an invalid edit on its own can be reset', async ({ page, context }) => {
   await expect(reset).toBeDisabled();
 });
 
-test('a character inserted between the original letters counts as an edit', async ({ page, context }) => {
+test('a character put inside a word splits it up, so it no longer counts as random (D8 as amended)', async ({ page, context }) => {
   const words = await reachCompose(page, context);
-  await field(page, 1).fill(`${words[0].slice(0, 2)}1${words[0].slice(2)}`);
-  await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
+  await field(page, 1).fill(`${words[0].slice(0, 2)}-${words[0].slice(2)}`);
+  await expect(tiles(page).first()).toContainText(copy.compose.origin.rewritten);
+  await expect(page.getByText(copy.compose.editedNote)).toBeVisible();
 });
 
 test('a failed Start fresh keeps the phrase, returns to Generate and holds drawing', async ({ page, context }) => {
@@ -377,8 +397,6 @@ test('a word can be removed after a confirmation; Reset brings it back; the last
   await page.getByRole('alertdialog', { name: copy.warn.removeTitle(words[2]) }).getByRole('button', { name: copy.warn.removeConfirm }).click();
   const five = words.filter((_, i) => i !== 2);
   await expect(preview(page)).toHaveText(five.join(' '));
-  await expect(page.getByText(copy.compose.counts(5, 5, 0, five.join(' ').length))).toBeVisible();
-  await expect(page.getByText(copy.generate.guidance.short)).toBeVisible();
 
   await page.getByRole('button', { name: copy.compose.reset }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
@@ -397,7 +415,6 @@ test('any number of words join into one, and Split separates them all again', as
   await page.getByRole('button', { name: `${copy.compose.join}: ${words[0] + words[1]}` }).click();
   const three = words[0] + words[1] + words[2];
   await expect(preview(page)).toHaveText([three, ...words.slice(3)].join(' '));
-  await expect(page.getByText(copy.compose.counts(6, 6, 0, [three, ...words.slice(3)].join(' ').length))).toBeVisible();
   await page.getByRole('button', { name: `${copy.compose.split}: ${three}` }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
 });
@@ -421,9 +438,9 @@ test('your own word is added at the end, moves and edits like a tile, and never 
   await own.fill('my 2nd!');
   await own.press('Enter');
   await expect(own).toHaveValue('');
+  await expect(preview(page)).toHaveText(words.join(' ')); // not typed unless the user chooses
+  await page.getByLabel(copy.compose.typeAdded).check();
   await expect(preview(page)).toHaveText([...words, 'my 2nd!'].join(' '));
-  const len = [...words, 'my 2nd!'].join(' ').length;
-  await expect(page.getByText(copy.compose.counts(6, 6, 0, len, 1))).toBeVisible();
   await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0); // nothing random was edited
 
   await handle(page, 'my 2nd!').press('ArrowLeft');
@@ -435,6 +452,21 @@ test('your own word is added at the end, moves and edits like a tile, and never 
   await page.getByRole('button', { name: copy.compose.remove('our 3rd!') }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
 });
+
+for (const width of [1280, 390]) {
+  test(`at ${width}px a tile takes two columns only when its word would not fit in one, and the word always shows in full`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await reachCompose(page, context);
+    const tile = tiles(page).first();
+    const fitsField = () => field(page, 1).evaluate((el: HTMLInputElement) => el.scrollWidth <= el.clientWidth);
+    await field(page, 1).fill('illiterates'); // eleven narrow letters: more than the old ten-character rule allowed
+    if (width > 600) await expect(tile).not.toHaveClass(/\bwide\b/); // phone columns are too narrow to be sure
+    expect(await fitsField()).toBe(true);
+    await field(page, 1).fill('reappearingmammoth');
+    await expect(tile).toHaveClass(/\bwide\b/);
+    expect(await fitsField()).toBe(true);
+  });
+}
 
 test('composing makes no requests and stores nothing; narrow screens work and pass accessibility checks', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });

@@ -32,11 +32,11 @@ export const copy = {
     edit: [
       'The strength comes from the random words. Each is drawn from 7,776 words, so even someone who knows exactly how Rememberphrase works has to guess every one.',
       "Moving words, joining them or adding small connecting words doesn't take that away, but it doesn't necessarily add to it either.",
-      'Editing, replacing or removing a word may make it less random. With fewer random words left, the phrase may be easier to guess.',
+      'Replacing a word, removing letters from it or removing it makes your phrase less random. Capitals, look-alike swaps like 3 for e and added characters keep a word random. With fewer random words left, the phrase may be easier to guess.',
     ],
     examplesOnly: 'Examples only. Do not use these as passwords.',
     examplesNote:
-      'These words were picked by hand to show the idea. Your own words are drawn at random in your tab, and only those, kept unchanged, count toward strength. The small words in between, like "with" and "the", are always your own choice.',
+      'These words were picked by hand to show the idea. Your own words are drawn at random in your tab, and only those count toward strength. The small words in between, like "with" and "the", are always your own choice.',
     nextTitle: 'What happens next',
     next: [
       'Fetch the word list while you are online.',
@@ -158,17 +158,18 @@ export const copy = {
       'edge-space': 'Remove the space at the start or end.',
     },
     connectorsTitle: 'Connecting words',
-    connectorsHelp: 'Drag one between your words, or select one and choose where it goes. They are not random words and are not counted.',
+    connectorsHelp: 'Drag one between your words, or select one and choose where it goes. They are never counted as random words.',
     ownLabel: 'Your own word',
     ownAdd: 'Add',
-    ownHelp: 'Anything you like: a word, digits or a symbol. It goes at the end of your phrase. Move it like any other word. Words you add never count as random words. Avoid anything others could link to you, such as names, birthdays or places.',
+    ownHelp: 'Anything you like: a word, digits or a symbol. It goes at the end of your phrase. Move it like any other word. Avoid anything others could link to you, such as names, birthdays or places.',
     ownAdded: (text: string) => `${text} added at the end.`,
     separatorLegend: 'Between words',
     separators: { space: 'Space', hyphen: 'Hyphen ( - )', period: 'Period ( . )', underscore: 'Underscore ( _ )', none: 'Nothing' },
-    previewLabel: 'Your phrase as you will type it',
-    counts: (intact: number, drawn: number, connectors: number, chars: number, own = 0) =>
-      `${intact} of ${drawn} random words unchanged · ${connectors} connecting ${connectors === 1 ? 'word' : 'words'}${own ? ` · ${own} of your own` : ''} · ${chars} characters`,
-    editedNote: 'Edited or replaced words no longer count as random words.',
+    previewLabel: 'Your chosen phrase',
+    typeAdded: 'Include connecting words in the phrase',
+    typeAddedHelp: "These words help you remember the order and you don't need to include them when typing your phrase.",
+    storyLabel: 'With connecting words',
+    editedNote: 'Replaced words, and words with letters removed, no longer count as random words.',
     keyboardNote: 'Your phrase has characters that can be hard to type on some keyboards or start-up screens.',
     reset: 'Reset my changes',
     startFresh: 'Start fresh',
@@ -178,7 +179,7 @@ export const copy = {
 
   // D9: only what the user states is checked, and a passed check is never presented as acceptance.
   requirements: {
-    title: 'Login requirements',
+    title: 'External password requirements',
     notSpecified: 'Requirements not specified',
     summary: (met: number, total: number) => `${met} of ${total} ${total === 1 ? 'rule' : 'rules'} met`,
     intro: 'Optional. Enter only what the service or computer asks for, and this page checks your phrase against it.',
@@ -206,7 +207,7 @@ export const copy = {
     met: 'Met',
     notMet: 'Not met',
     fix: {
-      minLength: 'Add a word in Generate, or a connecting word.',
+      minLength: 'Add a word in Generate, or include connecting words in the phrase.',
       maxLength: 'Use fewer or shorter words.',
       upper: 'Use Capitalise below.',
       lower: 'Edit a word to include a lowercase letter.',
@@ -223,7 +224,7 @@ export const copy = {
     symbolLabel: 'Add a symbol at the end',
     none: 'None',
     fitNote:
-      "These don't change how many random words count. Other changes, like @ for a, are edits: make them in a word above, and that word stops counting as random.",
+      "Changes here don't necessarily make a passphrase stronger. Other changes, like @ for a, can be made directly in the words below.",
   },
 
   remember: {
@@ -239,6 +240,9 @@ export const copy = {
     practiceIntro: 'Type your phrase from memory. What you type stays in this tab and is not sent or saved.',
     showPhrase: 'Show phrase',
     hidePhrase: 'Hide phrase',
+    showHint: 'Show connecting words',
+    hideHint: 'Hide connecting words',
+    hiddenWord: (chars: number) => `hidden word, ${chars} ${chars === 1 ? 'character' : 'characters'}`,
     attemptLabel: 'Type your phrase',
     showEntry: 'Show entry',
     hideEntry: 'Hide entry',
@@ -251,18 +255,17 @@ export const copy = {
     retry: 'Try again',
     practiceLimits: "Your browser, its extensions and anyone who can see your screen are outside this page's control.",
     strengthTitle: 'How strong is this phrase?',
-    strengthDraws: (intact: number, drawn: number, list: string) =>
-      `${intact === drawn ? `All ${drawn} of your` : `${intact} of your ${drawn}`} random words are exactly as drawn. Each was picked from ${list} words.`,
-    strengthTyped: (drawn: number, typed: number, chars: number) =>
-      `Your phrase is ${typed} ${typed === 1 ? 'word' : 'words'} and ${chars} characters, made from ${drawn} random draws.`,
+    // D8 as amended 2026-11-18: one count, one verdict, one reason; the rules wait behind What counts?
+    strengthCount: (intact: number, drawn: number) =>
+      intact === drawn ? `${drawn} random ${drawn === 1 ? 'word' : 'words'}` : `${intact} of ${drawn} words still random`,
+    strengthWhy: (list: string) =>
+      `Your phrase gets its strength from the random words. Each one is picked from ${list} words, so every extra random word makes the phrase much stronger.`,
     strengthNone: 'We cannot estimate the strength of words you wrote yourself.',
-    strengthCaveat:
-      'Based on how these words were generated. You chose which words to keep and their order; we do not count that as extra strength.',
-    strengthRules: [
-      'Locking, rerolling and reordering words do not add strength.',
-      'Joined words still count as the random words they came from, not as extra words.',
-      'An edited word no longer counts as random. A word you replaced is your own word, even if it is in the word list.',
-      'Connecting words, your own words, separators, and the Capitalise, Add a number and Add a symbol options do not change the guidance.',
+    countsTitle: 'What counts?',
+    counts: [
+      'Counts: random words, also with capitals, look-alike swaps like 3 for e, or characters added before or after.',
+      "Doesn't count: words you replaced or removed letters from, connecting words and your own words.",
+      "Doesn't add strength: moving, joining or locking words, separators, or the Capitalise, Add a number and Add a symbol options.",
     ],
     moreTitle: 'Want to know more?',
     managersTitle: 'Password managers',
@@ -400,8 +403,8 @@ export const copy = {
       title: 'About your phrase',
       body: [
         "Moving, joining and connecting words can make the phrase easier to remember. They don't necessarily add strength.",
-        'An edited or replaced word no longer counts as a random word. Reset my changes brings the generated words back.',
-        'The "Your phrase as you will type it" box shows exactly what you will type, including capitals, symbols and what sits between words.',
+        'A replaced word, or one with letters removed, no longer counts as a random word. Capitals, look-alike swaps and added characters are fine. Reset my changes brings the generated words back.',
+        'The "Your chosen phrase" box shows exactly what you will type, including capitals, symbols and what sits between words.',
       ],
     },
     remember: {
