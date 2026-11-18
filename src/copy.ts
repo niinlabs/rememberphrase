@@ -169,7 +169,20 @@ export const copy = {
     typeAdded: 'Include connecting words in the phrase',
     typeAddedHelp: "These words help you remember the order and you don't need to include them when typing your phrase.",
     storyLabel: 'With connecting words',
-    editedNote: 'Replaced words, and words with letters removed, no longer count as random words.',
+    // D8 as amended 2026-11-18, shown under the phrase in Make it yours: one dot per draw, one count,
+    // the D4 guidance, and the reason and rules behind What counts?
+    randomTitle: 'Random words',
+    strengthCount: (intact: number, drawn: number) =>
+      intact === drawn ? `${drawn} random ${drawn === 1 ? 'word' : 'words'}` : `${intact} of ${drawn} words still random`,
+    strengthWhy: (list: string) =>
+      `Your phrase gets its strength from the random words. Each one is picked from ${list} words, so every extra random word makes the phrase much stronger.`,
+    strengthNone: 'We cannot estimate the strength of words you wrote yourself.',
+    countsTitle: 'What counts?',
+    counts: [
+      'Counts: random words, also with capitals, look-alike swaps like 3 for e, or characters added before or after.',
+      "Doesn't count: words you replaced or removed letters from, connecting words and your own words.",
+      "Doesn't add strength: moving, joining or locking words, separators, or the Capitalise, Add a number and Add a symbol options.",
+    ],
     keyboardNote: 'Your phrase has characters that can be hard to type on some keyboards or start-up screens.',
     reset: 'Reset my changes',
     startFresh: 'Start fresh',
@@ -262,19 +275,6 @@ export const copy = {
     mismatch: "That doesn't match yet. Check capitals, spaces and what sits between words.",
     retry: 'Next attempt',
     practiceLimits: "Your browser, its extensions and anyone who can see your screen are outside this page's control.",
-    strengthTitle: 'How strong is this phrase?',
-    // D8 as amended 2026-11-18: one count, one verdict, one reason; the rules wait behind What counts?
-    strengthCount: (intact: number, drawn: number) =>
-      intact === drawn ? `${drawn} random ${drawn === 1 ? 'word' : 'words'}` : `${intact} of ${drawn} words still random`,
-    strengthWhy: (list: string) =>
-      `Your phrase gets its strength from the random words. Each one is picked from ${list} words, so every extra random word makes the phrase much stronger.`,
-    strengthNone: 'We cannot estimate the strength of words you wrote yourself.',
-    countsTitle: 'What counts?',
-    counts: [
-      'Counts: random words, also with capitals, look-alike swaps like 3 for e, or characters added before or after.',
-      "Doesn't count: words you replaced or removed letters from, connecting words and your own words.",
-      "Doesn't add strength: moving, joining or locking words, separators, or the Capitalise, Add a number and Add a symbol options.",
-    ],
     moreTitle: 'Want to know more?',
     managersTitle: 'Password managers',
     managers: [

@@ -69,11 +69,11 @@ test('editing a word updates the preview and its origin; invalid edits are refus
   await first.fill(`${words[0].toUpperCase()}1!`);
   await expect(preview(page)).toHaveText([`${words[0].toUpperCase()}1!`, ...words.slice(1)].join(' '));
   await expect(tiles(page).first()).toContainText(copy.compose.origin.edited);
-  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0); // dressed up, still random (D8 as amended)
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(6, 6)); // dressed up, still random (D8 as amended)
 
   await first.fill('zzqx');
   await expect(tiles(page).first()).toContainText(copy.compose.origin.rewritten);
-  await expect(page.getByText(copy.compose.editedNote)).toBeVisible();
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(5, 6));
 
   await first.fill('');
   await expect(page.getByText(copy.compose.wordErrors.empty)).toBeVisible();
@@ -82,7 +82,7 @@ test('editing a word updates the preview and its origin; invalid edits are refus
 
   await first.fill(words[0]);
   await expect(tiles(page).first()).toContainText(copy.compose.origin.unchanged);
-  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0);
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(6, 6));
 });
 
 test('words move with the arrow keys and the move is announced', async ({ page, context }) => {
@@ -274,7 +274,7 @@ test('joining words whose letters were moved between them reads as the two drawn
   await page.getByRole('button', { name: `${copy.compose.join}: ${words[0] + words[1][0]}` }).click();
   await expect(preview(page)).toHaveText([joined, ...words.slice(2)].join(' '));
   await expect(tiles(page).first()).toContainText(copy.compose.origin.combined);
-  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0);
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(6, 6));
 });
 
 test('an invalid edit on its own can be reset', async ({ page, context }) => {
@@ -291,7 +291,7 @@ test('a character put inside a word splits it up, so it no longer counts as rand
   const words = await reachCompose(page, context);
   await field(page, 1).fill(`${words[0].slice(0, 2)}-${words[0].slice(2)}`);
   await expect(tiles(page).first()).toContainText(copy.compose.origin.rewritten);
-  await expect(page.getByText(copy.compose.editedNote)).toBeVisible();
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(5, 6));
 });
 
 test('a failed Start fresh keeps the phrase, returns to Generate and holds drawing', async ({ page, context }) => {
@@ -445,7 +445,7 @@ test('your own word is added at the end, moves and edits like a tile, and never 
   await expect(preview(page)).toHaveText(words.join(' ')); // not typed unless the user chooses
   await page.getByLabel(copy.compose.typeAdded).check();
   await expect(preview(page)).toHaveText([...words, 'my 2nd!'].join(' '));
-  await expect(page.getByText(copy.compose.editedNote)).toHaveCount(0); // nothing random was edited
+  await expect(page.getByTestId('random-words').locator('.count')).toHaveText(copy.compose.strengthCount(6, 6)); // nothing random was edited
 
   await handle(page, 'my 2nd!').press('ArrowLeft');
   await expect(preview(page)).toHaveText([...words.slice(0, 5), 'my 2nd!', words[5]].join(' '));

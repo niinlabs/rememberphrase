@@ -79,16 +79,16 @@ test('the D4 guidance and the D8 wording for rewritten phrases are as approved',
     short: 'Shorter than we recommend for a master password or computer login.',
     recommended: 'The length we recommend for a master password or computer login.',
   });
-  expect(copy.remember.strengthNone).toBe('We cannot estimate the strength of words you wrote yourself.');
+  expect(copy.compose.strengthNone).toBe('We cannot estimate the strength of words you wrote yourself.');
 });
 
 test('strength copy gives one count and one reason, never combinations or time', () => {
-  const text = [copy.remember.strengthCount(5, 6), copy.remember.strengthWhy('7,776'), ...copy.remember.counts].join(' ');
+  const text = [copy.compose.strengthCount(5, 6), copy.compose.strengthWhy('7,776'), ...copy.compose.counts].join(' ');
   expect(text).not.toMatch(/\b(combinations?|possibilit\w+|years?|days?|seconds?|guess\w*)\b|\d[\d,]* ?(x|×) ?\d/i);
-  expect(copy.remember.strengthCount(6, 6)).toBe('6 random words');
-  expect(copy.remember.strengthCount(5, 6)).toBe('5 of 6 words still random');
+  expect(copy.compose.strengthCount(6, 6)).toBe('6 random words');
+  expect(copy.compose.strengthCount(5, 6)).toBe('5 of 6 words still random');
   // D8 as amended 2026-11-18: dressing a word up keeps it random; replacing it or removing letters does not.
-  const [counts, doesNot, noStrength] = copy.remember.counts;
+  const [counts, doesNot, noStrength] = copy.compose.counts;
   expect(counts).toMatch(/capitals.*look-alike swaps.*added/);
   expect(doesNot).toContain('replaced or removed letters from');
   expect(noStrength).toContain('the Capitalise, Add a number and Add a symbol options');

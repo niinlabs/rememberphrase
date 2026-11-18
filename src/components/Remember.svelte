@@ -1,21 +1,19 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { copy, guidanceFor } from '../copy';
-  import { drawsInPhrase, intactRandomWords, phraseText, SEPARATORS, storyTexts, type Phrase } from '../core/phrase';
+  import { intactRandomWords, phraseText, SEPARATORS, storyTexts, type Phrase } from '../core/phrase';
   import { checkRules, type Rules } from '../core/policy';
   import Icon from './Icon.svelte';
   import WarnDialog from './WarnDialog.svelte';
 
   let {
     phrase,
-    listSize,
     rules,
     onback,
     onclear,
     onanother,
   }: {
     phrase: Phrase | null;
-    listSize: number;
     rules: Rules;
     onback: () => void;
     onclear: () => void;
@@ -37,7 +35,6 @@
 
   const text = $derived(phrase ? phraseText(phrase) : '');
   const intact = $derived(phrase ? intactRandomWords(phrase) : 0);
-  const drawn = $derived(phrase ? drawsInPhrase(phrase) : 0); // removed words no longer count as drawn
   const hasAdded = $derived(!!phrase?.tokens.some((t) => t.kind !== 'word'));
   const unmet = $derived(checkRules(text, rules).filter((c) => !c.met).length);
   const aids = ['follow', 'reveal', 'none'] as const;
@@ -277,22 +274,6 @@
 
   <!-- D8 as amended 2026-11-18: one dot per random draw in the phrase, filled while it still counts.
        Secondary to practice; a short phrase's caution is already at the top. -->
-  <section class="strength" aria-labelledby="strength-title">
-    <h2 id="strength-title">{copy.remember.strengthTitle}</h2>
-    <p class="count">
-      <span class="dots" aria-hidden="true">{#each { length: drawn }, i (i)}<span class="dot" class:on={i < intact}></span>{/each}</span>
-      {copy.remember.strengthCount(intact, drawn)}
-    </p>
-    <p class="guidance">{guidanceFor(intact)}</p>
-    <p>{intact === 0 ? copy.remember.strengthNone : copy.remember.strengthWhy(listSize.toLocaleString('en'))}</p>
-    <details class="counts">
-      <summary>{copy.remember.countsTitle}</summary>
-      <ul class="tips">
-        {#each copy.remember.counts as line (line)}<li>{line}</li>{/each}
-      </ul>
-    </details>
-  </section>
-
   <!-- Optional reading: it never holds back practice, recovery or the caution above. -->
   <details class="more">
     <summary>{copy.remember.moreTitle}</summary>
@@ -335,9 +316,6 @@
     margin: 0.4rem 0 0.3rem;
     font-size: 1.1rem;
     color: var(--ink-soft);
-  }
-  .guidance {
-    font-weight: 650;
   }
   .caution {
     display: flex;
@@ -389,43 +367,11 @@
     font-weight: 700;
     cursor: pointer;
   }
-  .strength p,
   .more p {
     margin: 0.5rem 0 0;
   }
   .more h3 {
     margin: 0.9rem 0 0;
-    font-size: 1rem;
-  }
-  .strength .tips {
-    margin-top: 0.5rem;
-  }
-  .count {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem 0.7rem;
-    font-weight: 750;
-  }
-  .dots {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  /* Navy and yellow only: red, amber and green belong to the connection band. */
-  .dot {
-    width: 1rem;
-    height: 1rem;
-    border: 2px solid var(--navy-900);
-    border-radius: 50%;
-  }
-  .dot.on {
-    background: var(--yellow);
-  }
-  .counts {
-    margin-top: 0.6rem;
-  }
-  .counts summary {
     font-size: 1rem;
   }
   h2 {

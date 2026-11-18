@@ -51,7 +51,7 @@ test('Make it Yours leads to Remember: one memory sentence, the practice card an
   await expect(ideas).not.toHaveAttribute('open');
   await ideas.locator('summary').click();
   for (const tip of copy.remember.tips) await expect(ideas.getByText(tip)).toBeVisible();
-  await expect(page.getByText(copy.generate.guidance.recommended)).toBeVisible();
+  await expect(page.getByText(copy.generate.guidance.recommended)).toHaveCount(0); // the length guidance lives in Make it yours now
   for (const line of copy.remember.recovery) await expect(page.getByText(line)).toBeVisible();
   await expect(page.getByText(phrase, { exact: true })).toHaveCount(0);
 
@@ -285,9 +285,11 @@ test('Clear phrase warns first, then removes the phrase from the page and can st
   await expect(page.locator('.tiles .word')).toHaveCount(6);
 });
 
-const strength = (page: Page) => page.locator('section.strength');
-const count = (page: Page) => strength(page).locator('.count');
-const filled = (page: Page) => strength(page).locator('.dot.on');
+// Random words now sit under the phrase in Make it yours (D8 as amended 2026-11-18); Remember keeps the caution.
+const random = (page: Page) => page.getByTestId('random-words');
+const count = (page: Page) => random(page).locator('.count');
+const dot = (page: Page) => random(page).locator('.dot');
+const filled = (page: Page) => random(page).locator('.dot.on');
 const caution = (page: Page) => page.getByTestId('caution');
 const goRemember = async (page: Page) => {
   const phrase = await page.getByTestId('phrase-preview').innerText();
@@ -295,46 +297,60 @@ const goRemember = async (page: Page) => {
   return phrase;
 };
 
-test('strength comes after practice and recovery, as one dot per random word, the guidance and one reason', async ({ page, context }) => {
-  await reachRemember(page, context);
-  await expect(strength(page).getByRole('heading', { name: copy.remember.strengthTitle })).toBeVisible();
-  await expect(strength(page).locator('.dot')).toHaveCount(6);
+test('Make it yours shows twelve dots filled per random word, the count, the guidance and What counts?; Remember no longer does', async ({ page, context }) => {
+  await reachCompose(page, context);
+  await expect(page.locator('section.preview').getByTestId('random-words')).toBeVisible(); // in the preview box
+  await expect(random(page).getByRole('heading', { name: copy.compose.randomTitle })).toBeVisible();
+  await expect(dot(page)).toHaveCount(12); // always the most there can be
   await expect(filled(page)).toHaveCount(6);
-  await expect(count(page)).toHaveText(copy.remember.strengthCount(6, 6));
-  await expect(strength(page).getByText(copy.generate.guidance.recommended)).toBeVisible();
-  await expect(caution(page)).toHaveCount(0); // six random words: guidance without the caution mark
-  await expect(strength(page).getByText(copy.remember.strengthWhy('7,776'))).toBeVisible();
-  const recovery = (await page.getByRole('heading', { name: copy.remember.recoveryTitle }).boundingBox())!;
-  expect((await strength(page).boundingBox())!.y).toBeGreaterThan(recovery.y);
+  // Marks after the third and fifth dots split the row into the three D4 levels: too few, short, recommended.
+  await expect(random(page).locator('.mark')).toHaveCount(2);
+  await expect(random(page).locator('.dots > *').nth(3)).toHaveClass(/\bmark\b/);
+  await expect(random(page).locator('.dots > *').nth(6)).toHaveClass(/\bmark\b/);
+  await expect(count(page)).toHaveText(copy.compose.strengthCount(6, 6));
+  await expect(count(page).getByRole('status')).toHaveText(copy.compose.strengthCount(6, 6)); // the text, not the dots, is read
+  await expect(random(page).locator('.dots')).toHaveAttribute('aria-hidden', 'true');
+  await expect(random(page).getByText(copy.generate.guidance.recommended)).toBeVisible();
 
-  const counts = strength(page).locator('details.counts');
+  const counts = random(page).locator('details.counts');
   await expect(counts).not.toHaveAttribute('open');
   await counts.locator('summary').click();
-  for (const line of copy.remember.counts) await expect(counts.getByText(line)).toBeVisible();
-  expect(await strength(page).innerText()).not.toMatch(/\bbits?\b|crack|years|secure|2\^|\d+e\d+/i);
+  await expect(counts.getByText(copy.compose.strengthWhy('7,776'))).toBeVisible();
+  for (const line of copy.compose.counts) await expect(counts.getByText(line)).toBeVisible();
+  expect(await random(page).innerText()).not.toMatch(/\bbits?\b|crack|years|secure|2\^|\d+e\d+/i);
+
+  await goRemember(page);
+  await expect(page.getByTestId('random-words')).toHaveCount(0);
+  await expect(page.getByText(copy.compose.strengthCount(6, 6))).toHaveCount(0);
+  await expect(caution(page)).toHaveCount(0); // six random words: no caution
 });
 
-test('joined and dressed-up words keep counting; removing a letter loses one dot', async ({ page, context }) => {
+test('joined and dressed-up words keep their dots; removing a letter or lowering the count empties one each', async ({ page, context }) => {
   await reachCompose(page, context);
   const second = await field(page, 2).inputValue();
   await page.getByRole('button', { name: `${copy.compose.join}: ${second}` }).click();
-  await goRemember(page);
-  await expect(filled(page)).toHaveCount(6); // two draws, no bonus
-  await expect(caution(page)).toHaveCount(0);
+  await expect(filled(page)).toHaveCount(6); // two draws, two dots, no bonus
 
-  await page.getByRole('button', { name: copy.remember.back }).click();
   const joined = await field(page, 2).inputValue();
   await field(page, 2).fill(`${joined[0].toUpperCase()}${joined.slice(1)}9`); // capital and a digit
-  await goRemember(page);
   await expect(filled(page)).toHaveCount(6);
 
-  await page.getByRole('button', { name: copy.remember.back }).click();
-  await field(page, 2).fill(joined.slice(0, -1)); // the second word loses its last letter
-  await goRemember(page);
+  await field(page, 2).fill(joined.slice(0, -1)); // the third drawn word loses its last letter
+  await expect(dot(page)).toHaveCount(12);
   await expect(filled(page)).toHaveCount(5);
-  await expect(strength(page).locator('.dot')).toHaveCount(6);
-  await expect(count(page)).toHaveText(copy.remember.strengthCount(5, 6));
+  await expect(dot(page).nth(4)).toHaveClass(/\bon\b/); // filled from the start, short of the mark
+  await expect(dot(page).nth(5)).not.toHaveClass(/\bon\b/);
+  await expect(count(page)).toHaveText(copy.compose.strengthCount(5, 6));
+  await goRemember(page);
   await expect(caution(page)).toHaveText(copy.generate.guidance.short);
+});
+
+test('a four-word phrase fills four of twelve dots, short of the recommended mark', async ({ page, context }) => {
+  await reachCompose(page, context, 4);
+  await expect(dot(page)).toHaveCount(12);
+  await expect(filled(page)).toHaveCount(4);
+  await expect(count(page)).toHaveText(copy.compose.strengthCount(4, 4));
+  await expect(random(page).getByText(copy.generate.guidance.short)).toBeVisible();
 });
 
 test('a four-word phrase carries the caution without opening the details', async ({ page, context }) => {
@@ -345,14 +361,16 @@ test('a four-word phrase carries the caution without opening the details', async
   await expect(caution(page).locator('svg')).toHaveCount(1);
 });
 
-test('with every word rewritten, the page says it cannot estimate the strength', async ({ page, context }) => {
+test('with every word rewritten, Make it yours says it cannot estimate the strength', async ({ page, context }) => {
   await reachCompose(page, context);
   for (let n = 1; n <= 6; n++) await field(page, n).fill(`Qz${n}`);
+  await expect(filled(page)).toHaveCount(0);
+  await expect(dot(page)).toHaveCount(12);
+  await random(page).locator('details.counts summary').click();
+  await expect(random(page).getByText(copy.compose.strengthNone)).toBeVisible();
+  await expect(random(page).getByText(copy.compose.strengthWhy('7,776'))).toHaveCount(0);
   await goRemember(page);
   await expect(caution(page)).toHaveText(copy.generate.guidance.tooFew);
-  await expect(filled(page)).toHaveCount(0);
-  await expect(strength(page).getByText(copy.remember.strengthNone)).toBeVisible();
-  await expect(strength(page).getByText(copy.remember.strengthWhy('7,776'))).toHaveCount(0);
 });
 
 test('Want to know more? is optional reading after the recovery copy, about managers and 2FA', async ({ page, context }) => {
@@ -371,16 +389,16 @@ test('Want to know more? is optional reading after the recovery copy, about mana
   await expect(more.getByText('Rememberphrase is not a password manager and does not keep your phrase.')).toBeVisible();
 });
 
-// Checks that one phrase state drives everything: the Make it Yours counts and login checklist, then in
-// Remember the rule reminder, the strength details and the exact string practice accepts. It leaves a
+// Checks that one phrase state drives everything: the Make it Yours random-word count and login checklist,
+// then in Remember the rule reminder and the exact string practice accepts. It leaves a
 // wrong attempt behind each time, so the next visit proves an old attempt never survives a change.
 async function checkEverywhere(page: Page, s: { intact: number; connectors: number; spaces: boolean }) {
   const phrase = await page.getByTestId('phrase-preview').innerText();
+  await expect(count(page)).toHaveText(copy.compose.strengthCount(s.intact, 6));
   await expect(page.locator('details.requirements .status')).toHaveText(copy.requirements.summary(s.spaces ? 0 : 1, 1));
   await page.getByRole('button', { name: copy.compose.continue }).click();
   await expect(entry(page)).toHaveValue('');
   await expect(page.getByText(copy.remember.rulesUnmet(1))).toHaveCount(s.spaces ? 1 : 0);
-  await expect(count(page)).toHaveText(copy.remember.strengthCount(s.intact, 6));
   await entry(page).fill(phrase);
   await expect(result(page)).toHaveText(copy.remember.match);
   await entry(page).fill(`${phrase}x`);

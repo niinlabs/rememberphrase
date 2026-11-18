@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { copy } from '../copy';
+  import { copy, guidanceFor } from '../copy';
   import type { Status } from '../core/status';
   import {
     canCombine,
@@ -9,13 +9,15 @@
     combine,
     CONNECTORS,
     drawFrom,
+    DEFAULT_WORDS,
     drawsInPhrase,
+    intactRandomWords,
+    MAX_WORDS,
     edit,
     generate,
     hasEdits,
     insertConnector,
     insertOwn,
-    intactRandomWords,
     move,
     origin,
     phraseText,
@@ -135,6 +137,7 @@
   // The full story, shown under the phrase while connecting and own words are left out of it.
   const story = $derived(storyTexts(phrase));
   const intact = $derived(intactRandomWords(phrase));
+  const drawn = $derived(drawsInPhrase(phrase));
   const connectorCount = $derived(phrase.tokens.filter((t) => t.kind === 'connector').length);
   const ownCount = $derived(phrase.tokens.filter((t) => t.kind === 'own').length);
   let ownDraft = $state('');
@@ -151,7 +154,6 @@
   const separators = Object.keys(SEPARATORS) as Separator[];
   const sameItem = (a: Item | null, b: Item) =>
     !!a && a.kind === b.kind && (a.kind === 'token' ? a.id === (b as typeof a).id : a.text === (b as typeof a).text);
-  const drawn = $derived(drawsInPhrase(phrase));
   const indexOf = (id: string) => phrase.tokens.findIndex((t) => t.id === id);
 
   async function place(item: Item, at: number) {
@@ -304,8 +306,31 @@
         >{/each}{phrase.decoration.digit ?? ''}{phrase.decoration.symbol ?? ''}
     </p>
   {/if}
-  {#if intact < drawn}<p class="note">{copy.compose.editedNote}</p>{/if}
   {#if /[^\x20-\x7e]/.test(text)}<p class="note warn">{copy.compose.keyboardNote}</p>{/if}
+  <!-- Provenance, not a strength score: shape and text carry it, in navy and yellow only (red, amber
+       and green belong to the connection band). Only the count is announced, when it changes. -->
+  <div class="random" data-testid="random-words">
+    <h3>{copy.compose.randomTitle}</h3>
+    <p class="count">
+      <!-- A gauge of all twelve possible words: filled up to the random words that still count, with marks
+           where the D4 guidance changes: after three (too few) and after five (recommended from six). -->
+      <span class="dots" aria-hidden="true"
+        >{#each { length: MAX_WORDS }, i (i)}{#if i === 3 || i === DEFAULT_WORDS - 1}<span class="mark"></span>{/if}<span
+            class="dot"
+            class:on={i < intact}
+          ></span>{/each}</span
+      >
+      <span role="status">{copy.compose.strengthCount(intact, drawn)}</span>
+    </p>
+    <p class="guidance">{guidanceFor(intact)}</p>
+    <details class="counts">
+      <summary>{copy.compose.countsTitle}</summary>
+      <p>{intact === 0 ? copy.compose.strengthNone : copy.compose.strengthWhy(words.length.toLocaleString('en'))}</p>
+      <ul>
+        {#each copy.compose.counts as line (line)}<li>{line}</li>{/each}
+      </ul>
+    </details>
+  </div>
 </section>
 <fieldset class="separators">
   <legend>{copy.compose.separatorLegend}</legend>
@@ -883,6 +908,73 @@
   }
   .warn {
     color: var(--yellow);
+  }
+  .random {
+    margin-top: 0.8rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid rgb(255 255 255 / 0.15);
+  }
+  .random h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 750;
+    color: var(--yellow);
+  }
+  .count {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.7rem;
+    margin: 0;
+    font-weight: 750;
+  }
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  /* Filled for each random word that counts, hollow for the rest: shape first, colour second. */
+  .dot {
+    width: 0.95rem;
+    height: 0.95rem;
+    border: 2px solid #b9c3da;
+    border-radius: 50%;
+  }
+  .dot.on {
+    border-color: var(--yellow);
+    background: var(--yellow);
+  }
+  .mark {
+    width: 2px;
+    height: 1.35rem;
+    margin: 0 0.15rem;
+    border-radius: 1px;
+    background: #fff;
+  }
+  .guidance {
+    margin: 0.3rem 0 0;
+    font-size: 0.92rem;
+    color: #d5dcec;
+  }
+  .counts {
+    margin-top: 0.4rem;
+    font-size: 0.92rem;
+    color: #d5dcec;
+  }
+  .counts summary {
+    width: fit-content;
+    color: #fff;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .counts p,
+  .counts ul {
+    margin: 0.4rem 0 0;
+  }
+  .counts ul {
+    padding-left: 1.2rem;
+    line-height: 1.45;
   }
 
   .footer {

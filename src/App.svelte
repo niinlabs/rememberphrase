@@ -245,7 +245,6 @@
       {:else if step === 'remember' && words}
         <Remember
           {phrase}
-          listSize={words.length}
           {rules}
           onback={() => goTo('compose')}
           onclear={() => {
