@@ -296,9 +296,10 @@
   <p class="phrase" data-testid="phrase-preview">{text}</p>
   {#if !phrase.typeAdded && connectorCount + ownCount > 0}
     <p class="story-label">{copy.compose.storyLabel}</p>
-    <!-- Separators and the end decoration are written out, as Svelte drops whitespace between elements. -->
+    <!-- A memory aid, so words are always spaced whatever is chosen under Between words. The spaces are
+         written out, as Svelte drops whitespace between elements. -->
     <p class="story" data-testid="story-preview">
-      {#each story as word, i (i)}{i > 0 ? SEPARATORS[phrase.separator] : ''}<span class:added={phrase.tokens[i].kind !== 'word'}
+      {#each story as word, i (i)}{i > 0 ? ' ' : ''}<span class:added={phrase.tokens[i].kind !== 'word'}
           >{word}</span
         >{/each}{phrase.decoration.digit ?? ''}{phrase.decoration.symbol ?? ''}
     </p>

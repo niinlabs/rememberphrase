@@ -148,6 +148,10 @@ test('connecting words only help recall unless the user chooses to type them; th
   const withAnd = [words[0], 'and', ...words.slice(1)].join(' ');
   await expect(preview(page)).toHaveText(words.join(' '));
   await expect(story(page)).toHaveText(withAnd);
+  await page.getByRole('radio', { name: copy.compose.separators.hyphen }).check();
+  await expect(preview(page)).toHaveText(words.join('-'));
+  await expect(story(page)).toHaveText(withAnd); // the story always uses spaces
+  await page.getByRole('radio', { name: copy.compose.separators.space }).check();
 
   await typeAdded.check();
   await expect(preview(page)).toHaveText(withAnd);
