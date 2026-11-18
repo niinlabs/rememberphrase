@@ -36,6 +36,12 @@ jobs:
     name: Browser tests (${{ matrix.browser }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Playwright's own image already holds the browsers and their system packages. Installing WebKit's
+    # packages from Ubuntu's servers on the runner took over 20 minutes twice. Keep the version in step
+    # with @playwright/test; user 1001 is the runner's, as Firefox refuses to start as root here.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --user 1001
     strategy:
       fail-fast: false # a failure in one browser still lets the others finish
       matrix:
@@ -50,7 +56,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      # Does nothing while the image matches @playwright/test; after a version bump it fetches only the browser.
+      - run: pnpm exec playwright install ${{ matrix.browser }}
       - run: pnpm test:e2e --project=${{ matrix.browser }}
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
