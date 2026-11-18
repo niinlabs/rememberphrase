@@ -23,6 +23,17 @@ test('a fresh visit opens the introduction, with no word list, check, other site
   const origin = new URL(page.url()).origin;
   expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:'))).toEqual([]);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length + document.cookie.length)).toBe(0);
+  // The tab icon is written into the page, so no favicon is fetched; it must still load under the CSP. The
+  // only icon a browser may fetch is the home-screen one, from this site (Firefox does, as the page loads).
+  expect(requests.filter((u) => /icon/.test(u) && !/\/assets\/apple-touch-icon-[\w-]+\.png$/.test(u))).toEqual([]);
+  const icon = await page.locator('link[rel="icon"]').getAttribute('href');
+  expect(icon).toMatch(/^data:image\/png;base64,/);
+  expect(await page.evaluate((src) => new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => ok(img.naturalWidth);
+    img.onerror = () => ok(0);
+    img.src = src;
+  }), icon!)).toBe(32);
 });
 
 test('the one start button comes last and opens Step 1 with focus on its heading, without fetching', async ({ page }) => {
