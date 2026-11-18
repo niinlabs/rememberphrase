@@ -36,6 +36,25 @@ test('a fresh visit opens the introduction, with no word list, check, other site
   }), icon!)).toBe(32);
 });
 
+test('the page describes itself for search and link previews, and visitors never fetch the preview image', async ({ page, request }) => {
+  const requests: string[] = [];
+  page.on('request', (r) => requests.push(r.url()));
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  const meta = (attr: string, key: string) => page.locator(`meta[${attr}="${key}"]`).getAttribute('content');
+  const description = await meta('name', 'description');
+  expect(description).toContain('never sends them anywhere');
+  expect(await meta('property', 'og:description')).toBe(description);
+  expect(description).not.toMatch(/\b(secure|safe|guarantee\w*|uncrackable|impossible)\b/i); // same rule as the page copy
+  expect(await meta('property', 'og:image')).toBe('https://rememberphrase.com/social-preview.png');
+  expect(await meta('name', 'twitter:card')).toBe('summary_large_image');
+  expect(requests.filter((u) => u.includes('social-preview'))).toEqual([]);
+
+  const image = await request.get('/social-preview.png'); // served by this site for preview services
+  expect(image.status()).toBe(200);
+  expect(image.headers()['content-type']).toBe('image/png');
+});
+
 test('the one start button comes last and opens Step 1 with focus on its heading, without fetching', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', (r) => requests.push(r.url()));
