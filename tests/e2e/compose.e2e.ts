@@ -39,9 +39,19 @@ function failableRandom() {
   }) as typeof crypto.getRandomValues;
 }
 
+// Scrolls so both ends of a drag are fully on screen. Playwright's Firefox drops pointer moves outside
+// the window, and a target that is only partly visible can have its centre just below the edge.
+async function showBoth(page: Page, a: Locator, b: Locator) {
+  const spans = await Promise.all(
+    [a, b].map((l) => l.evaluate((el) => [el.getBoundingClientRect().top + scrollY, el.getBoundingClientRect().bottom + scrollY])),
+  );
+  const middle = (Math.min(spans[0][0], spans[1][0]) + Math.max(spans[0][1], spans[1][1])) / 2;
+  await page.evaluate((y) => window.scrollTo({ top: y - innerHeight / 2, behavior: 'instant' }), middle);
+}
+
 // Drags with real pointer events from one element's centre to just before another's left edge.
 async function dragTo(page: Page, from: Locator, before: Locator) {
-  await from.scrollIntoViewIfNeeded();
+  await showBoth(page, from, before);
   const a = (await from.boundingBox())!;
   const b = (await before.boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
@@ -372,7 +382,7 @@ test('while dragging, a copy of the word follows the pointer and the other words
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text())); // a CSP block would show here
   const from = handle(page, words[0]);
-  await tiles(page).nth(3).scrollIntoViewIfNeeded(); // each step opens at the top, above the tiles
+  await showBoth(page, from, tiles(page).nth(3)); // each step opens at the top, above the tiles
   const a = (await from.boundingBox())!;
   const b = (await tiles(page).nth(3).boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
