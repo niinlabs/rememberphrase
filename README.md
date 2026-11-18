@@ -1,4 +1,9 @@
-# Rememberphrase
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-white.png">
+    <img src="docs/images/logo.png" alt="Rememberphrase" width="420">
+  </picture>
+</h1>
 
 **Random start. Your story. A passphrase you can remember.**
 
@@ -15,6 +20,18 @@ Being prepared for its first public release. The automated tests pass; manual de
 3. Generate 4–12 random words. Keep the ones you like and reroll the rest.
 4. Arrange, join and edit the words into a phrase you can picture, add connecting words or your own, and check it against your login's requirements.
 5. Practise typing it, keep a recovery copy on paper, and learn how password managers and two-factor authentication fit in.
+
+## Screenshots
+
+The words below come from a test run and are shown only as examples. Do not use them.
+
+![The welcome screen, with two example phrases and what to expect before you start](docs/images/welcome.png)
+
+| Step 1. Get ready | Step 2. Generate random words |
+| --- | --- |
+| ![Step 1: the word list is loaded and the page asks you to disconnect from every network](docs/images/step-1-prepare.png) | ![Step 2: six random words, each of which can be locked before rerolling the rest](docs/images/step-2-generate.png) |
+| **Step 3. Make it yours** | **Step 4. Remember your phrase** |
+| ![Step 3: the chosen phrase with connecting words, the random-words dots and the word tiles](docs/images/step-3-make-it-yours.png) | ![Step 4: practising with Follow along, the first word lit as it is typed](docs/images/step-4-remember.png) |
 
 ## Design requirements
 
