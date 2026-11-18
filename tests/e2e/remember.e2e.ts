@@ -8,8 +8,17 @@ import { startAtStep1 } from './start';
 const entry = (page: Page) => page.getByLabel(copy.remember.attemptLabel, { exact: true });
 const eye = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) entry$/ });
 const result = (page: Page) => page.locator('.result');
-const reveal = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) phrase$/ });
-const hint = (page: Page) => page.getByRole('button', { name: /^(Show|Hide) connecting words$/ });
+const reveal = (page: Page) => page.getByRole('button', { name: /^(Reveal|Hide) whole phrase$/ });
+const rail = (page: Page) => page.getByTestId('practice-rail');
+const aid = (page: Page, name: keyof typeof copy.remember.aids) => page.getByRole('radio', { name: copy.remember.aids[name], exact: true });
+// What the rail shows on screen: screen-reader-only text removed.
+const seen = (page: Page) =>
+  rail(page).evaluate((el) => {
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.visually-hidden').forEach((n) => n.remove());
+    return clone.textContent!.trim();
+  });
+const withConnectors = (page: Page) => page.getByLabel(copy.remember.showConnectors);
 const field = (page: Page, n: number) => page.getByRole('textbox', { name: new RegExp(`^${copy.compose.wordLabel(n)},`) });
 
 async function reachCompose(page: Page, context: BrowserContext, count = 6) {
@@ -34,10 +43,14 @@ async function reachRemember(page: Page, context: BrowserContext) {
   return phrase;
 }
 
-test('Make it Yours leads to Remember: tips, the guidance and recovery show, and the phrase starts hidden', async ({ page, context }) => {
+test('Make it Yours leads to Remember: one memory sentence, the practice card and recovery show, and the phrase starts hidden', async ({ page, context }) => {
   const phrase = await reachRemember(page, context);
   await expect(page.getByRole('navigation', { name: 'Progress' }).locator('[aria-current="step"]')).toContainText('Remember');
-  for (const tip of copy.remember.tips) await expect(page.getByText(tip)).toBeVisible();
+  await expect(page.getByText(copy.remember.stick)).toBeVisible();
+  const ideas = page.locator('details.ideas');
+  await expect(ideas).not.toHaveAttribute('open');
+  await ideas.locator('summary').click();
+  for (const tip of copy.remember.tips) await expect(ideas.getByText(tip)).toBeVisible();
   await expect(page.getByText(copy.generate.guidance.recommended)).toBeVisible();
   for (const line of copy.remember.recovery) await expect(page.getByText(line)).toBeVisible();
   await expect(page.getByText(phrase, { exact: true })).toHaveCount(0);
@@ -51,9 +64,63 @@ test('Make it Yours leads to Remember: tips, the guidance and recovery show, and
   await expect(page.getByTestId('reference-phrase')).toHaveCount(0);
 });
 
-test('Show connecting words masks each random word with one star per letter, between the words in clear', async ({ page, context }) => {
+test('practice starts with No aid and nothing of the phrase; Show connecting words is offered only with added words', async ({ page, context }) => {
+  const phrase = await reachRemember(page, context);
+  await expect(aid(page, 'none')).toBeChecked();
+  await expect(rail(page)).toHaveCount(0);
+  await expect(page.getByText(copy.remember.aidHelp.none)).toBeVisible();
+  for (const a of ['follow', 'reveal'] as const) await expect(aid(page, a)).toBeVisible();
+  await expect(withConnectors(page)).toHaveCount(0);
+  await entry(page).fill(phrase.slice(0, 3));
+  await expect(result(page)).toHaveText(''); // without an aid, only a match or Enter gives a result
+});
+
+test('Follow along shows the phrase faintly and lights it while the typing matches; a mistake stops it', async ({ page, context }) => {
+  const phrase = await reachRemember(page, context);
+  await aid(page, 'follow').check();
+  await expect(rail(page)).toHaveText(phrase);
+  await expect(rail(page).locator('.lit')).toHaveCount(0); // nothing lit yet
+  await entry(page).fill(phrase.slice(0, 3));
+  await expect(rail(page).locator('.lit')).toHaveText(phrase.slice(0, 3));
+  await expect(result(page)).toHaveText(copy.remember.live.short);
+
+  // A wrong fourth character, then the rest typed correctly: nothing past the mistake lights up.
+  await entry(page).fill(`${phrase.slice(0, 3)}#${phrase.slice(4)}`);
+  await expect(rail(page).locator('.lit')).toHaveText(phrase.slice(0, 3));
+  await expect(rail(page).locator('.stop')).toHaveCount(1);
+  await expect(result(page)).toHaveText(copy.remember.live.wrong);
+  await expect(result(page)).toHaveCSS('color', 'rgb(180, 35, 24)'); // --red
+
+  await entry(page).fill(phrase);
+  await expect(rail(page).locator('.lit')).toHaveText(phrase);
+  await expect(rail(page).locator('.stop')).toHaveCount(0);
+  await expect(result(page)).toHaveText(copy.remember.match);
+  await expect(result(page)).toHaveCSS('color', 'rgb(30, 111, 55)'); // --green
+  await expect(result(page).locator('svg')).toHaveCount(1); // never colour alone
+  await entry(page).fill(`${phrase}x`);
+  await expect(result(page)).toHaveText(copy.remember.live.long);
+});
+
+test('Reveal as you type shows one dot per character and turns dots into characters only as typed correctly', async ({ page, context }) => {
+  const phrase = await reachRemember(page, context);
+  const n = [...phrase].length;
+  await aid(page, 'reveal').check();
+  expect(await seen(page)).toBe('•'.repeat(n));
+  await expect(rail(page)).toContainText(copy.remember.hidden(n));
+  await entry(page).fill(phrase.slice(0, 5));
+  expect(await seen(page)).toBe(phrase.slice(0, 5) + '•'.repeat(n - 5));
+  await expect(rail(page)).toContainText(copy.remember.hidden(n - 5));
+  await entry(page).fill(`${phrase.slice(0, 5)}#${phrase.slice(6)}`);
+  expect(await seen(page)).toBe(phrase.slice(0, 5) + '•'.repeat(n - 5)); // the mistake stops it
+  await expect(rail(page).locator('.stop')).toHaveCount(1);
+
+  await aid(page, 'none').check(); // switching aids keeps the typing
+  await expect(rail(page)).toHaveCount(0);
+  await expect(entry(page)).toHaveValue(`${phrase.slice(0, 5)}#${phrase.slice(6)}`);
+});
+
+test('Show connecting words adds the added words to an aid, with each random word as dots in Reveal as you type', async ({ page, context }) => {
   await reachRemember(page, context);
-  await expect(hint(page)).toHaveCount(0); // nothing to show without connecting or own words
   await page.getByRole('button', { name: copy.remember.back }).click();
   const words = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => field(page, n).inputValue()));
   for (const [c, at] of [['and', 2], ['with', 4]] as const) {
@@ -64,24 +131,40 @@ test('Show connecting words masks each random word with one star per letter, bet
   await page.getByRole('radio', { name: copy.requirements.capitalise.every }).check();
   await page.getByRole('button', { name: copy.compose.continue }).click();
 
-  const stars = (w: string) => '*'.repeat([...w].length);
+  const dots = (w: string) => '•'.repeat([...w].length);
   const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
-  const expected = [stars(words[0]), 'And', stars(words[1]), 'With', ...words.slice(2).map(stars)].join(' '); // cased as typed
-  await hint(page).click();
-  await expect(hint(page)).toHaveAccessibleName(copy.remember.hideHint);
-  const shown = page.getByTestId('reference-hint');
-  await expect(shown.locator('[aria-hidden="true"]')).toHaveCount(6);
-  // What is seen: stars and connecting words; screen readers hear the length instead of the stars.
-  expect(await shown.evaluate((el) => {
-    const seen = el.cloneNode(true) as HTMLElement;
-    seen.querySelectorAll('.visually-hidden').forEach((n) => n.remove());
-    return seen.textContent!.trim();
-  })).toBe(expected);
-  await expect(shown).toContainText(copy.remember.hiddenWord([...words[0]].length));
+  await expect(withConnectors(page)).toBeDisabled(); // No aid: nothing to add them to
+  await aid(page, 'reveal').check();
+  await withConnectors(page).check();
+  // Not typed: set apart where they belong, after the separator they sit in.
+  expect(await seen(page)).toBe(`${dots(words[0])} And${dots(words[1])} With${words.slice(2).map(dots).join(' ')}`);
+  await expect(rail(page).locator('.aside')).toHaveText([`${copy.remember.notTyped} And`, `${copy.remember.notTyped} With`]);
+  await expect(rail(page)).toContainText(copy.remember.hidden([...words[0]].length));
+  await entry(page).fill(`${cap(words[0])} `); // typing lights past the separator, the aside stays as it is
+  expect(await seen(page)).toBe(`${cap(words[0])} And${dots(words[1])} With${words.slice(2).map(dots).join(' ')}`);
+  await expect(rail(page).locator('.lit')).toHaveText(`${cap(words[0])} `);
 
-  await reveal(page).click(); // the phrase replaces the hint
-  await expect(page.getByTestId('reference-hint')).toHaveCount(0);
-  await expect(page.getByTestId('reference-phrase')).toHaveText(words.map(cap).join(' '));
+  await aid(page, 'follow').check(); // the choice carries over to the other aid
+  expect(await seen(page)).toBe(`${cap(words[0])} And${cap(words[1])} With${words.slice(2).map(cap).join(' ')}`);
+  await withConnectors(page).uncheck();
+  await expect(rail(page).locator('.aside')).toHaveCount(0);
+  await aid(page, 'none').check();
+  await expect(withConnectors(page)).toBeDisabled();
+
+  await page.getByRole('button', { name: copy.remember.back }).click();
+  await page.getByLabel(copy.compose.typeAdded).check();
+  await page.getByRole('radio', { name: copy.compose.separators.hyphen }).check();
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await aid(page, 'reveal').check();
+  await withConnectors(page).check();
+  expect(await seen(page)).toBe([dots(words[0]), 'And', dots(words[1]), 'With', ...words.slice(2).map(dots)].join('-')); // the exact string, masked
+  await expect(rail(page).locator('.aside')).toHaveCount(0);
+
+  await reveal(page).click(); // the whole phrase is a separate control
+  await expect(page.getByTestId('reference-phrase')).toHaveText(
+    [words[0], 'And', words[1], 'With', ...words.slice(2)].map(cap).join('-'),
+  );
+  await expect(rail(page)).toBeVisible();
 });
 
 test('the entry starts masked; the eye shows and hides it without losing the text or focus', async ({ page, context }) => {
@@ -106,31 +189,37 @@ test('the entry starts masked; the eye shows and hides it without losing the tex
   await expect(entry(page)).toHaveValue('practice text');
 });
 
-test('the check is exact: case and separators count, and a mismatch never shows the phrase', async ({ page, context }) => {
+test('the check is automatic and exact: case and separators count, and a mismatch never shows the phrase', async ({ page, context }) => {
   const phrase = await reachRemember(page, context);
-  const check = page.getByRole('button', { name: copy.remember.check, exact: true });
-  await expect(check).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Check$/ })).toHaveCount(0);
+  const next = page.getByRole('button', { name: copy.remember.retry });
 
   for (const wrong of [phrase.toUpperCase(), phrase.replaceAll(' ', '-'), `${phrase} `]) {
     await entry(page).fill(wrong);
-    await check.click();
+    await expect(result(page)).toHaveText(''); // No aid: nothing about a wrong attempt until Enter
+    await entry(page).press('Enter');
     await expect(result(page)).toHaveText(copy.remember.mismatch);
+    await expect(next).toHaveCount(0);
     await expect(page.getByTestId('reference-phrase')).toHaveCount(0);
   }
   await entry(page).fill(phrase);
-  await expect(result(page)).toHaveText(''); // typing again clears the old result
-  await entry(page).press('Enter');
-  await expect(result(page)).toHaveText(copy.remember.match);
+  await expect(result(page)).toHaveText(copy.remember.match); // no button press needed
+  await expect(next).toBeVisible();
 });
 
-test('Try again clears the attempt and returns to the field', async ({ page, context }) => {
-  await reachRemember(page, context);
-  await entry(page).fill('not it');
-  await page.getByRole('button', { name: copy.remember.check, exact: true }).click();
-  await page.getByRole('button', { name: copy.remember.retry }).click();
+test('Next attempt appears on a match, then clears the attempt and returns to the field', async ({ page, context }) => {
+  const phrase = await reachRemember(page, context);
+  const next = page.getByRole('button', { name: copy.remember.retry });
+  await entry(page).fill(phrase);
+  await next.click();
   await expect(entry(page)).toHaveValue('');
   await expect(entry(page)).toBeFocused();
   await expect(result(page)).toHaveText('');
+  await expect(next).toHaveCount(0);
+
+  await entry(page).fill(phrase);
+  await entry(page).press('Enter'); // Enter on a match starts the next attempt too
+  await expect(entry(page)).toHaveValue('');
 });
 
 test('there is no Skip practice button: practice is optional and recovery is always on the page', async ({ page, context }) => {
@@ -152,12 +241,10 @@ test('practice compares against the final phrase after edits, connecting words a
   expect(final).not.toBe(plain);
   await page.getByRole('button', { name: copy.compose.continue }).click();
 
-  const check = page.getByRole('button', { name: copy.remember.check, exact: true });
   await entry(page).fill(plain);
-  await check.click();
+  await entry(page).press('Enter');
   await expect(result(page)).toHaveText(copy.remember.mismatch);
   await entry(page).fill(final);
-  await check.click();
   await expect(result(page)).toHaveText(copy.remember.match);
 });
 
@@ -201,14 +288,14 @@ test('Clear phrase warns first, then removes the phrase from the page and can st
 const strength = (page: Page) => page.locator('section.strength');
 const count = (page: Page) => strength(page).locator('.count');
 const filled = (page: Page) => strength(page).locator('.dot.on');
-const caution = (page: Page) => page.locator('.guidance.caution');
+const caution = (page: Page) => page.getByTestId('caution');
 const goRemember = async (page: Page) => {
   const phrase = await page.getByTestId('phrase-preview').innerText();
   await page.getByRole('button', { name: copy.compose.continue }).click();
   return phrase;
 };
 
-test('strength shows first, as one dot per random word, the guidance and one reason, with no false precision', async ({ page, context }) => {
+test('strength comes after practice and recovery, as one dot per random word, the guidance and one reason', async ({ page, context }) => {
   await reachRemember(page, context);
   await expect(strength(page).getByRole('heading', { name: copy.remember.strengthTitle })).toBeVisible();
   await expect(strength(page).locator('.dot')).toHaveCount(6);
@@ -217,8 +304,8 @@ test('strength shows first, as one dot per random word, the guidance and one rea
   await expect(strength(page).getByText(copy.generate.guidance.recommended)).toBeVisible();
   await expect(caution(page)).toHaveCount(0); // six random words: guidance without the caution mark
   await expect(strength(page).getByText(copy.remember.strengthWhy('7,776'))).toBeVisible();
-  const practice = (await page.getByRole('heading', { name: copy.remember.practiceTitle }).boundingBox())!;
-  expect((await strength(page).boundingBox())!.y).toBeLessThan(practice.y);
+  const recovery = (await page.getByRole('heading', { name: copy.remember.recoveryTitle }).boundingBox())!;
+  expect((await strength(page).boundingBox())!.y).toBeGreaterThan(recovery.y);
 
   const counts = strength(page).locator('details.counts');
   await expect(counts).not.toHaveAttribute('open');
@@ -295,7 +382,6 @@ async function checkEverywhere(page: Page, s: { intact: number; connectors: numb
   await expect(page.getByText(copy.remember.rulesUnmet(1))).toHaveCount(s.spaces ? 1 : 0);
   await expect(count(page)).toHaveText(copy.remember.strengthCount(s.intact, 6));
   await entry(page).fill(phrase);
-  await page.getByRole('button', { name: copy.remember.check, exact: true }).click();
   await expect(result(page)).toHaveText(copy.remember.match);
   await entry(page).fill(`${phrase}x`);
   await page.getByRole('button', { name: copy.remember.back }).click();
@@ -343,32 +429,6 @@ test('every change in Make it Yours or Generate reaches the counts, the login ch
   expect(await checkEverywhere(page, { intact: 6, connectors: 0, spaces: true })).not.toBe(seen[0]);
 });
 
-test('Check as I type says wrong, too short and too long as you go, in red and green, and disables Check', async ({ page, context }) => {
-  const phrase = await reachRemember(page, context);
-  const live = page.getByTestId('practice-result');
-  await page.getByLabel(copy.remember.autoCheck).check();
-  await expect(page.getByRole('button', { name: copy.remember.check, exact: true })).toBeDisabled();
-  await entry(page).fill(phrase.slice(0, 3));
-  await expect(live).toHaveText(copy.remember.live.short);
-  await entry(page).fill(`${phrase.slice(0, 3)}#`);
-  await expect(live).toHaveText(copy.remember.live.wrong);
-  await expect(live).toHaveClass(/wrong/);
-  await entry(page).fill(phrase);
-  await expect(live).toHaveText(copy.remember.match);
-  await expect(live).toHaveCSS('color', 'rgb(30, 111, 55)'); // --green
-  await expect(live.locator('svg')).toHaveCount(1); // never colour alone
-  await entry(page).fill(`${phrase}x`);
-  await expect(live).toHaveText(copy.remember.live.long);
-  await expect(live).toHaveCSS('color', 'rgb(180, 35, 24)'); // --red
-  await expect(page.getByTestId('reference-phrase')).toHaveCount(0); // live checking never reveals the phrase
-
-  await page.getByLabel(copy.remember.autoCheck).uncheck();
-  await expect(live).toHaveText('');
-  await entry(page).press('Enter');
-  await expect(live).toHaveText(copy.remember.mismatch);
-  await expect(live).toHaveCSS('color', 'rgb(180, 35, 24)');
-});
-
 test('the clear icon empties the field and keeps focus in it', async ({ page, context }) => {
   await reachRemember(page, context);
   await expect(page.getByRole('button', { name: copy.remember.clearEntry })).toHaveCount(0);
@@ -394,7 +454,6 @@ test('practising makes no requests, stores nothing and has no form; narrow scree
   await reveal(page).click();
   await entry(page).fill(phrase);
   await eye(page).click();
-  await entry(page).press('Enter');
   await expect(result(page)).toHaveText(copy.remember.match);
   expect(requests).toEqual([]);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length + document.cookie.length)).toBe(0);

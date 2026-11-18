@@ -102,7 +102,6 @@ test('Remember points back to unmet rules, and practice uses the fitted phrase',
   await page.getByRole('button', { name: copy.compose.continue }).click();
   await expect(page.getByText(copy.remember.rulesUnmet(1))).toHaveCount(0);
   await page.getByLabel(copy.remember.attemptLabel, { exact: true }).fill(fitted);
-  await page.getByRole('button', { name: copy.remember.check, exact: true }).click();
   await expect(page.locator('.result')).toHaveText(copy.remember.match);
 });
 

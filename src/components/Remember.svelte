@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { copy, guidanceFor } from '../copy';
-  import { drawsInPhrase, intactRandomWords, phraseText, storyTexts, type Phrase } from '../core/phrase';
+  import { drawsInPhrase, intactRandomWords, phraseText, SEPARATORS, storyTexts, type Phrase } from '../core/phrase';
   import { checkRules, type Rules } from '../core/policy';
   import Icon from './Icon.svelte';
   import WarnDialog from './WarnDialog.svelte';
@@ -22,13 +22,16 @@
     onanother: () => void;
   } = $props();
 
+  type Aid = 'follow' | 'reveal' | 'none';
+
   // All practice state is local, so leaving this step (to edit the phrase, or on a reconnection)
   // destroys it: an attempt never outlives the phrase it was typed for (D13).
-  let revealed = $state<'phrase' | 'hint' | null>(null); // the phrase, or its words masked between the connecting words
+  let aid = $state<Aid>('none'); // D13: no aid by default, so nothing of the phrase shows unasked
+  let withConnectors = $state(false); // adds the connecting words to Follow along or Reveal as you type
+  let whole = $state(false); // the Reveal whole phrase escape hatch, separate from the aids
   let attempt = $state('');
   let masked = $state(true);
-  let result = $state<'match' | 'mismatch' | null>(null);
-  let autoCheck = $state(false);
+  let result = $state<'mismatch' | null>(null); // only from Enter, as a match shows by itself
   let clearOpen = $state(false);
   let entry = $state<HTMLInputElement>();
 
@@ -36,21 +39,81 @@
   const intact = $derived(phrase ? intactRandomWords(phrase) : 0);
   const drawn = $derived(phrase ? drawsInPhrase(phrase) : 0); // removed words no longer count as drawn
   const hasAdded = $derived(!!phrase?.tokens.some((t) => t.kind !== 'word'));
-  // The hint's words cased as in the full story under the phrase in Make it yours.
-  const story = $derived(phrase ? storyTexts(phrase) : []);
-  const toggle = (which: 'phrase' | 'hint') => (revealed = revealed === which ? null : which);
   const unmet = $derived(checkRules(text, rules).filter((c) => !c.met).length);
+  const aids = ['follow', 'reveal', 'none'] as const;
+
+  // How much of the phrase is typed correctly so far. Progress stops at the first mistake, so an aid
+  // never lights the answer past it.
+  const chars = $derived([...text]);
+  const lit = $derived.by(() => {
+    const typed = [...attempt];
+    let n = 0;
+    while (n < typed.length && n < chars.length && typed[n] === chars[n]) n++;
+    return n;
+  });
+  const mistake = $derived([...attempt].length > lit);
+
+  // The phrase in token order: what is typed, with the separators between it, and added words that are
+  // not typed, which go after the separator they sit in. Words cased as typed.
+  const hintParts = $derived.by(() => {
+    const p = phrase;
+    if (!p) return [];
+    const story = storyTexts(p);
+    const typed = (i: number) => p.typeAdded || p.tokens[i].kind === 'word';
+    let typedBefore = false;
+    let sepDone = false;
+    return p.tokens.map((t, i) => {
+      let sep = '';
+      if (typedBefore && !sepDone && p.tokens.some((_, j) => j >= i && typed(j))) {
+        sep = SEPARATORS[p.separator];
+        sepDone = true;
+      }
+      if (typed(i)) [typedBefore, sepDone] = [true, false];
+      return { id: t.id, sep, masked: t.kind === 'word', typed: typed(i), text: story[i] };
+    });
+  });
+
+  // The rail as runs: lit (typed correctly), dim (shown), masked (dots), aside (not typed) and the stop
+  // mark after the last correct character. Typed runs together spell exactly the phrase text, so they
+  // line up with lit. Reveal as you type masks everything not yet lit, except, with connecting words
+  // shown, all that is not a random word; asides show only with connecting words.
+  type Run = { kind: 'lit' | 'dim' | 'masked' | 'aside' | 'stop'; text: string };
+  const runs = $derived.by(() => {
+    const out: Run[] = [];
+    const show = withConnectors && hasAdded;
+    const push = (kind: Run['kind'], text: string) => {
+      const last = out.at(-1);
+      if (last?.kind === kind && kind !== 'aside') last.text += text;
+      else out.push({ kind, text });
+    };
+    let k = 0;
+    const typed = (s: string, random: boolean) => {
+      for (const c of s) {
+        push(k < lit ? 'lit' : aid === 'follow' || (show && !random) ? 'dim' : 'masked', c);
+        if (++k === lit && mistake) push('stop', '');
+      }
+    };
+    if (lit === 0 && mistake) push('stop', '');
+    for (const part of hintParts) {
+      typed(part.sep, false);
+      if (part.typed) typed(part.text, part.masked);
+      else if (show) push('aside', part.text);
+    }
+    typed(`${phrase?.decoration.digit ?? ''}${phrase?.decoration.symbol ?? ''}`, false);
+    return out;
+  });
 
   // Exact comparison with the string the preview showed, so case, separators and symbols all count.
-  const check = () => (result = attempt === text ? 'match' : 'mismatch');
-  // Check as I type: says whether what is typed so far still leads to the phrase, without showing it.
+  // A match shows as soon as it is typed, in every aid; how far off a wrong attempt is shows only with
+  // Follow along or Reveal as you type, while No aid and Connecting words say "doesn't match" on Enter.
   const live = $derived.by(() => {
-    if (!autoCheck || !attempt) return null;
+    if (!attempt) return null;
     if (attempt === text) return 'match';
     if (text.startsWith(attempt)) return 'short';
     return attempt.startsWith(text) ? 'long' : 'wrong';
   });
-  const shown = $derived(autoCheck ? live : result);
+  const matched = $derived(live === 'match');
+  const shown = $derived(matched || aid === 'follow' || aid === 'reveal' ? live : result);
   const messages = {
     match: copy.remember.match,
     mismatch: copy.remember.mismatch,
@@ -64,7 +127,7 @@
     result = null;
   }
 
-  function retry() {
+  function nextAttempt() {
     forget();
     entry?.focus();
   }
@@ -72,7 +135,7 @@
   async function clear() {
     clearOpen = false;
     forget();
-    revealed = null;
+    whole = false;
     onclear();
     await tick();
     document.getElementById('page-title')?.focus();
@@ -92,26 +155,10 @@
   </div>
 {:else}
   <p class="intro">{copy.remember.intro}</p>
-  <!-- D8 as amended 2026-11-18: one dot per random draw in the phrase, filled while it still counts. -->
-  <section class="strength" aria-labelledby="strength-title">
-    <h2 id="strength-title">{copy.remember.strengthTitle}</h2>
-    <p class="count">
-      <span class="dots" aria-hidden="true">{#each { length: drawn }, i (i)}<span class="dot" class:on={i < intact}></span>{/each}</span>
-      {copy.remember.strengthCount(intact, drawn)}
-    </p>
-    <!-- D4: shorter phrases get a caution mark so the warning cannot be missed. -->
-    <p class="guidance" class:caution={intact <= 5}>
-      {#if intact <= 5}<Icon name="caution" size={20} />{/if}
-      {guidanceFor(intact)}
-    </p>
-    <p>{intact === 0 ? copy.remember.strengthNone : copy.remember.strengthWhy(listSize.toLocaleString('en'))}</p>
-    <details class="counts">
-      <summary>{copy.remember.countsTitle}</summary>
-      <ul class="tips">
-        {#each copy.remember.counts as line (line)}<li>{line}</li>{/each}
-      </ul>
-    </details>
-  </section>
+  <!-- D4: a short phrase keeps its caution at the top, where it cannot be missed. -->
+  {#if intact <= 5}
+    <p class="caution" data-testid="caution"><Icon name="caution" size={20} />{guidanceFor(intact)}</p>
+  {/if}
 
   {#if unmet}
     <p class="unmet">
@@ -120,39 +167,45 @@
     </p>
   {/if}
 
-  <section aria-labelledby="tips-title">
+  <section class="stick" aria-labelledby="tips-title">
     <h2 id="tips-title">{copy.remember.tipsTitle}</h2>
-    <ul class="tips">
-      {#each copy.remember.tips as tip (tip)}<li>{tip}</li>{/each}
-    </ul>
+    <p>{copy.remember.stick}</p>
+    <details class="ideas">
+      <summary>{copy.remember.ideasTitle}</summary>
+      <ul class="tips">
+        {#each copy.remember.tips as tip (tip)}<li>{tip}</li>{/each}
+      </ul>
+    </details>
   </section>
 
   <section class="practice" aria-labelledby="practice-title">
     <h2 id="practice-title">{copy.remember.practiceTitle}</h2>
     <p class="help">{copy.remember.practiceIntro}</p>
 
-    <!-- The reference is hidden while recalling and is only shown on request, never announced by itself. -->
-    <div class="reveals">
-      <button class="button secondary reveal" aria-expanded={revealed === 'phrase'} aria-controls="reference" onclick={() => toggle('phrase')}>
-        {revealed === 'phrase' ? copy.remember.hidePhrase : copy.remember.showPhrase}
-      </button>
+    <fieldset class="aids" aria-describedby="aid-help">
+      <legend>{copy.remember.aidLegend}</legend>
+      <div class="segments">
+        {#each aids as a (a)}
+          <label class:on={aid === a}><input type="radio" name="aid" value={a} bind:group={aid} />{copy.remember.aids[a]}</label>
+        {/each}
+      </div>
+      <p class="help" id="aid-help">{copy.remember.aidHelp[aid]}</p>
       {#if hasAdded}
-        <button class="button secondary reveal" aria-expanded={revealed === 'hint'} aria-controls="reference" onclick={() => toggle('hint')}>
-          {revealed === 'hint' ? copy.remember.hideHint : copy.remember.showHint}
-        </button>
+        <!-- Kept but greyed out with No aid, which shows nothing to add the words to. -->
+        <label class="with-connectors">
+          <input type="checkbox" bind:checked={withConnectors} disabled={aid === 'none'} />
+          {copy.remember.showConnectors}
+        </label>
       {/if}
-    </div>
-    <div id="reference">
-      {#if revealed === 'phrase'}<p class="phrase" data-testid="reference-phrase">{text}</p>{/if}
-      <!-- The connecting and own words in clear, each random word as one star per character. -->
-      {#if revealed === 'hint'}
-        <p class="phrase" data-testid="reference-hint">
-          {#each phrase.tokens as token, i (token.id)}{i > 0 ? ' ' : ''}{#if token.kind === 'word'}<span aria-hidden="true"
-                >{'*'.repeat([...token.text].length)}</span
-              ><span class="visually-hidden">{copy.remember.hiddenWord([...token.text].length)}</span>{:else}{story[i]}{/if}{/each}
-        </p>
-      {/if}
-    </div>
+    </fieldset>
+
+    <!-- The rail shows what the chosen aid allows of the phrase; with No aid there is none. Its content
+         is written on one line, as Svelte drops whitespace between elements and the rail keeps spaces. -->
+    {#if aid !== 'none'}
+      <p class="rail" data-testid="practice-rail">
+        {#each runs as run, i (i)}{#if run.kind === 'stop'}<span class="stop" aria-hidden="true"></span>{:else if run.kind === 'masked'}<span class="dim" aria-hidden="true">{'•'.repeat([...run.text].length)}</span><span class="visually-hidden">{copy.remember.hidden([...run.text].length)}</span>{:else if run.kind === 'aside'}<span class="aside"><span class="visually-hidden">{`${copy.remember.notTyped} `}</span>{run.text}</span>{:else}<span class={run.kind}>{run.text}</span>{/if}{/each}
+      </p>
+    {/if}
 
     <label class="field" for="attempt">{copy.remember.attemptLabel}</label>
     <div class="entry">
@@ -173,15 +226,16 @@
           result = null;
         }}
         onkeydown={(e) => {
-          if (e.key === 'Enter' && attempt && !autoCheck) check();
+          if (e.key === 'Enter' && attempt) matched ? nextAttempt() : (result = 'mismatch');
         }}
       />
       {#if attempt}
-        <button class="eye" aria-label={copy.remember.clearEntry} onmousedown={(e) => e.preventDefault()} onclick={retry}>
+        <button class="eye" aria-label={copy.remember.clearEntry} onmousedown={(e) => e.preventDefault()} onclick={nextAttempt}>
           <Icon name="close" />
         </button>
       {/if}
-      <!-- Pressing the eye keeps focus (and the phone keyboard) in the field. -->
+      <!-- The eye changes how the typing shows, not which aid is active. Pressing it keeps focus (and the
+           phone keyboard) in the field. -->
       <button
         class="eye"
         aria-label={masked ? copy.remember.showEntry : copy.remember.hideEntry}
@@ -193,20 +247,20 @@
       </button>
     </div>
 
-    <label class="auto">
-      <input type="checkbox" bind:checked={autoCheck} onchange={() => (result = null)} />
-      {copy.remember.autoCheck}
-    </label>
-
-    <div class="actions">
-      <button class="button primary" onclick={check} disabled={!attempt || autoCheck}>{copy.remember.check}</button>
-      {#if result === 'mismatch'}<button class="button secondary" onclick={retry}>{copy.remember.retry}</button>{/if}
-    </div>
     <!-- Red and green (approved 2026-11-05 for practice), always with an icon so colour is not the only signal. -->
     <p class="result {shown}" role="status" data-testid="practice-result">
       {#if shown === 'match'}<Icon name="check" size={20} />{:else if shown && shown !== 'short'}<Icon name="close" size={20} />{/if}
       {shown ? messages[shown] : ''}
     </p>
+    <div class="actions">
+      {#if matched}<button class="button primary" onclick={nextAttempt}>{copy.remember.retry}</button>{/if}
+      <button class="link whole" aria-expanded={whole} aria-controls="whole" onclick={() => (whole = !whole)}>
+        {whole ? copy.remember.hidePhrase : copy.remember.showPhrase}
+      </button>
+    </div>
+    <div id="whole">
+      {#if whole}<p class="phrase" data-testid="reference-phrase">{text}</p>{/if}
+    </div>
     <p class="help">{copy.remember.practiceLimits}</p>
   </section>
 
@@ -215,6 +269,28 @@
     <ul class="tips">
       {#each copy.remember.recovery as line (line)}<li>{line}</li>{/each}
     </ul>
+    <div class="clear-row">
+      <button class="button primary" onclick={() => (clearOpen = true)}>{copy.remember.clear}</button>
+      <p>{copy.remember.clearHelp}</p>
+    </div>
+  </section>
+
+  <!-- D8 as amended 2026-11-18: one dot per random draw in the phrase, filled while it still counts.
+       Secondary to practice; a short phrase's caution is already at the top. -->
+  <section class="strength" aria-labelledby="strength-title">
+    <h2 id="strength-title">{copy.remember.strengthTitle}</h2>
+    <p class="count">
+      <span class="dots" aria-hidden="true">{#each { length: drawn }, i (i)}<span class="dot" class:on={i < intact}></span>{/each}</span>
+      {copy.remember.strengthCount(intact, drawn)}
+    </p>
+    <p class="guidance">{guidanceFor(intact)}</p>
+    <p>{intact === 0 ? copy.remember.strengthNone : copy.remember.strengthWhy(listSize.toLocaleString('en'))}</p>
+    <details class="counts">
+      <summary>{copy.remember.countsTitle}</summary>
+      <ul class="tips">
+        {#each copy.remember.counts as line (line)}<li>{line}</li>{/each}
+      </ul>
+    </details>
   </section>
 
   <!-- Optional reading: it never holds back practice, recovery or the caution above. -->
@@ -231,8 +307,6 @@
       <Icon name="back" />
       {copy.remember.back}
     </button>
-    <button class="button primary" onclick={() => (clearOpen = true)}>{copy.remember.clear}</button>
-    <p>{copy.remember.clearHelp}</p>
   </div>
 
   <WarnDialog
@@ -263,22 +337,33 @@
     color: var(--ink-soft);
   }
   .guidance {
+    font-weight: 650;
+  }
+  .caution {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin: 0;
-    font-weight: 650;
-  }
-  .guidance :global(svg) {
-    flex: none; /* keeps the caution mark full size when the text wraps */
-  }
-  .guidance.caution {
-    margin-top: 0.4rem;
+    margin: 0.6rem 0 0;
     padding: 0.6rem 0.9rem;
     border-left: 5px solid var(--navy-900);
     border-radius: 6px;
     background: var(--cream);
     font-weight: 750;
+  }
+  .caution :global(svg) {
+    flex: none; /* keeps the caution mark full size when the text wraps */
+  }
+  .stick p {
+    margin: 0;
+  }
+  .ideas {
+    margin-top: 0.4rem;
+  }
+  .ideas summary {
+    font-size: 1rem;
+  }
+  .ideas .tips {
+    margin-top: 0.4rem;
   }
   .unmet {
     margin: 0.6rem 0 0;
@@ -358,25 +443,129 @@
     color: var(--ink-soft);
   }
 
+  /* The workspace: one card from choosing an aid to checking the attempt. */
   .practice {
-    margin-top: 1.2rem;
-    padding: 0.2rem 1.1rem 1rem;
+    margin-top: 1.4rem;
+    padding: 0.2rem clamp(1rem, 3vw, 1.6rem) 1.2rem;
     border: 1px solid var(--cream-line);
-    border-radius: 18px;
+    border-radius: 20px;
     background: var(--cream);
+    box-shadow: 0 10px 28px -22px rgb(3 8 24 / 0.55);
   }
   .practice h2 {
-    margin-top: 0.9rem;
+    margin-top: 1rem;
+    font-size: 1.35rem;
   }
-  .reveals {
+  .aids {
+    margin: 0.9rem 0 0;
+    padding: 0;
+    border: none;
+  }
+  .aids legend {
+    margin-bottom: 0.45rem;
+    padding: 0;
+    font-weight: 700;
+  }
+  .segments {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 0.8rem;
+    gap: 0.4rem;
   }
-  .reveal {
-    min-height: 2.75rem;
-    font-size: 1rem;
+  .segments label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--cream-line);
+    border-radius: 999px;
+    background: var(--paper);
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .segments label.on {
+    border-color: var(--navy-900);
+    background: var(--navy-900);
+    color: #fff;
+  }
+  @media (max-width: 600px) {
+    .segments {
+      flex-direction: column;
+    }
+  }
+  .segments input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--yellow);
+  }
+  .with-connectors {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .with-connectors:has(input:disabled) {
+    color: var(--muted);
+    cursor: default;
+  }
+  .with-connectors input {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin: 0;
+    accent-color: var(--navy-900);
+  }
+  .rail {
+    margin: 0.8rem 0 0;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius);
+    background: var(--navy-900);
+    color: #fff;
+    font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+    font-weight: 750;
+    letter-spacing: 0.02em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .rail .lit {
+    color: var(--yellow);
+  }
+  .rail .dim {
+    color: rgb(255 255 255 / 0.4);
+  }
+  /* Where a mistake stopped progress: a mark, never the next character. */
+  .rail .stop {
+    display: inline-block;
+    width: 3px;
+    height: 1.1em;
+    margin: 0 2px;
+    border-radius: 2px;
+    background: #ff7a6b;
+    vertical-align: text-bottom;
+  }
+  .rail .aside {
+    margin: 0 0.3em;
+    font-weight: 450;
+    font-style: italic;
+    color: #b9c3da;
+  }
+  .whole {
+    margin-left: auto;
+    font-size: 0.95rem;
+  }
+  .clear-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.9rem;
+    margin-top: 0.9rem;
+  }
+  .clear-row p {
+    margin: 0;
+    color: var(--ink-soft);
   }
   .phrase {
     margin: 0.6rem 0 0;
@@ -440,18 +629,6 @@
     gap: 0.6rem;
     margin-top: 0.8rem;
   }
-  .auto {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin-top: 0.7rem;
-    cursor: pointer;
-  }
-  .auto input {
-    width: 1.1rem;
-    height: 1.1rem;
-    accent-color: var(--navy-900);
-  }
   .result {
     display: flex;
     align-items: center;
@@ -477,10 +654,5 @@
     margin-top: 1.25rem;
     padding-top: 1rem;
     border-top: 1px solid var(--line);
-  }
-  .footer p {
-    flex-basis: 100%;
-    margin: 0;
-    color: var(--ink-soft);
   }
 </style>

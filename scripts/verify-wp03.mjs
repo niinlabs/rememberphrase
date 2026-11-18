@@ -12,7 +12,7 @@ check('policy, decoration and copy fixtures pass', () =>
   unitFixtures({ 'tests/unit/policy.test.ts': 6, 'tests/unit/phrase.test.ts': 41, 'tests/unit/copy.test.ts': 20 }),
 );
 check(`Remember and login-requirements browser fixtures pass in ${BROWSERS.join(', ')}`, () =>
-  browserFixtures({ 'tests/e2e/remember.e2e.ts': 19, 'tests/e2e/requirements.e2e.ts': 7 }, BROWSERS),
+  browserFixtures({ 'tests/e2e/remember.e2e.ts': 21, 'tests/e2e/requirements.e2e.ts': 7 }, BROWSERS),
 );
 check('device, screen-reader, copy and security reviews are recorded', () => manualRecord('docs/evidence/wp03-manual.md'));
 
