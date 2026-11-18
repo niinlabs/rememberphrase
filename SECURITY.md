@@ -24,4 +24,4 @@ Include what you found, the steps to reproduce it, and the browser and device yo
 
 ## Supported versions
 
-Only the current `main` branch and the site deployed from it are supported.
+Only the current `main` branch and the site deployed from it, <https://rememberphrase.com>, are supported.

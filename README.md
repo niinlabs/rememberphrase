@@ -6,9 +6,11 @@
 
 Rememberphrase is a guided web page for creating and learning one of the few passwords you need to remember, such as a password-manager master password or a computer login. It is not a password manager.
 
+**Use it at [rememberphrase.com](https://rememberphrase.com).**
+
 ## Status
 
-Being prepared for its first public release. The automated tests pass; manual device, screen-reader and copy checks are recorded in [docs/evidence](docs/evidence) as they are completed.
+Live at [rememberphrase.com](https://rememberphrase.com) since 18 November 2026. The automated tests run on every change; some manual device, screen-reader and copy checks are still being recorded in [docs/evidence](docs/evidence).
 
 ## How it works
 
@@ -38,7 +40,7 @@ The words below come from a test run and are shown only as examples. Do not use 
 - Strength guidance is based on how the words were generated. Reordering, capitals, look-alike swaps and added characters are not counted as extra randomness, and a replaced word, or one with letters removed, stops counting.
 - The page cannot verify that your device is offline. It relies on your confirmation and says so.
 
-Automated tests check these requirements on every run; manual and release checks are recorded before release.
+Automated tests check these requirements on every run; manual checks are recorded in [docs/evidence](docs/evidence).
 
 ## Tech stack
 
