@@ -437,5 +437,11 @@ export const copy = {
 };
 
 // D4: the guidance level follows the number of intact random words (D8).
+// The most intact words at each level below recommended; the Step 3 dot lines sit right after them.
+export const GUIDANCE_LIMITS = { tooFew: 3, short: 5 } as const;
 export const guidanceFor = (intact: number) =>
-  intact <= 3 ? copy.generate.guidance.tooFew : intact <= 5 ? copy.generate.guidance.short : copy.generate.guidance.recommended;
+  intact <= GUIDANCE_LIMITS.tooFew
+    ? copy.generate.guidance.tooFew
+    : intact <= GUIDANCE_LIMITS.short
+      ? copy.generate.guidance.short
+      : copy.generate.guidance.recommended;

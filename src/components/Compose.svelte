@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { copy, guidanceFor } from '../copy';
+  import { copy, GUIDANCE_LIMITS, guidanceFor } from '../copy';
   import type { Status } from '../core/status';
   import {
     canCombine,
@@ -9,7 +9,6 @@
     combine,
     CONNECTORS,
     drawFrom,
-    DEFAULT_WORDS,
     drawsInPhrase,
     intactRandomWords,
     MAX_WORDS,
@@ -313,9 +312,9 @@
     <h3>{copy.compose.randomTitle}</h3>
     <p class="count">
       <!-- A gauge of all twelve possible words: filled up to the random words that still count, with marks
-           where the D4 guidance changes: after three (too few) and after five (recommended from six). -->
+           where the D4 guidance changes, after the last dot of each level below recommended. -->
       <span class="dots" aria-hidden="true"
-        >{#each { length: MAX_WORDS }, i (i)}{#if i === 3 || i === DEFAULT_WORDS - 1}<span class="mark"></span>{/if}<span
+        >{#each { length: MAX_WORDS }, i (i)}{#if i === GUIDANCE_LIMITS.tooFew || i === GUIDANCE_LIMITS.short}<span class="mark"></span>{/if}<span
             class="dot"
             class:on={i < intact}
           ></span>{/each}</span
