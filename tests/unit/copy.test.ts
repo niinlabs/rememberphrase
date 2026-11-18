@@ -149,7 +149,7 @@ test('the landing says what the site is not, labels the examples and makes no re
   expect(strings(copy.landing).concat(copy.panel.landing.body).join(' ')).not.toMatch(/airplane/i);
 });
 
-// Wording settled in Niclas's review of 2026-11-05.
+// Wording settled in the maintainer's copy review of 2026-11-05.
 test('reviewed panel wording stays as agreed', () => {
   expect(copy.panel.offline.body.join(' ')).toContain('one small test that tries to reach rememberphrase.com');
   expect(copy.panel.compose.body.join(' ')).toContain("They don't necessarily add strength.");

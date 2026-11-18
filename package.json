@@ -1,6 +1,15 @@
 {
   "name": "rememberphrase",
   "private": true,
+  "description": "A guided, offline-capable page for making and memorising one passphrase from random EFF words.",
+  "homepage": "https://github.com/niinlabs/rememberphrase#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niinlabs/rememberphrase.git"
+  },
+  "bugs": {
+    "url": "https://github.com/niinlabs/rememberphrase/issues"
+  },
   "type": "module",
   "license": "Apache-2.0",
   "engines": {

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Keeps the pinned actions in .github/workflows current. Dependabot updates the commit hash and the
+  # version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Only propose releases at least 7 days old, the same wait pnpm-workspace.yaml sets for packages.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
+
+  # The npm packages in package.json (all development tools), resolved by pnpm through pnpm-lock.yaml.
+  # Versions stay exact, as savePrefix in pnpm-workspace.yaml keeps them.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+    cooldown:
+      default-days: 7
+    # Minor and patch updates come as one pull request; a major update gets its own, as it may need code changes.
+    groups:
+      packages:
+        update-types: [minor, patch]

@@ -13,7 +13,8 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     // shortcut: uses the installed Firefox via WebDriver BiDi because Playwright's bundled
     // Firefox 157 fails to start on macOS 27; switch back once Playwright ships a fixed build.
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], channel: 'moz-firefox' } },
+    // CI runs on Linux, where the bundled Firefox works, so it keeps that one.
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], ...(process.env.CI ? {} : { channel: 'moz-firefox' }) } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
 });

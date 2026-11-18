@@ -6,8 +6,8 @@ FROM node:24-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-# CI=true: pnpm aborts on its install prompt when there is no TTY, which is how
-# thingfold's first Coolify build failed.
+# CI=true: without a TTY, pnpm otherwise stops at its install prompt and the
+# build fails.
 RUN CI=true pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
@@ -20,9 +20,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Run the master as nginx (uid 101) rather than root. nginx creates its temp
 # directories at startup and /var/cache/nginx is root-owned in the base image,
-# so they are created and chowned here — act-before-web failed to start on
-# exactly this, and inspecting a running container hides it, because there the
-# directories exist only because the root master already made them.
+# so they are created and chowned here; without this the container fails to
+# start. Inspecting a running container hides the problem, because there the
+# directories exist only because a root master already made them.
 RUN mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
       /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp /var/cache/nginx/scgi_temp \
  && chown -R nginx:nginx /var/cache/nginx
