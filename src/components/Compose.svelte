@@ -41,6 +41,8 @@
   import Requirements from './Requirements.svelte';
   import WarnDialog from './WarnDialog.svelte';
 
+  const ANNOUNCE_MS = 5000; // generous, as a polite announcement waits for whatever is being read
+
   let {
     words,
     status,
@@ -67,6 +69,19 @@
   let dropAt = $state<number | null>(null);
   let errors = $state<Record<string, WordError>>({});
   let announcement = $state('');
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  // Announcements name words, so each is cleared once a screen reader has had time to read it: the hidden
+  // text never keeps a word that has since left the phrase.
+  function announce(message: string) {
+    clearTimeout(announceTimer);
+    announcement = message;
+    announceTimer = setTimeout(() => (announcement = ''), ANNOUNCE_MS);
+  }
+  function silence() {
+    clearTimeout(announceTimer);
+    announcement = '';
+  }
+  $effect(() => () => clearTimeout(announceTimer));
   let freshOpen = $state(false);
   let version = $state(0); // bumped on Reset so word fields show the restored text even after an invalid edit
   let list: HTMLOListElement;
@@ -147,7 +162,7 @@
     ownError = wordError(ownDraft);
     if (ownError) return;
     phrase = insertOwn(phrase, ownDraft, phrase.tokens.length);
-    announcement = copy.compose.ownAdded(ownDraft);
+    announce(copy.compose.ownAdded(ownDraft));
     ownDraft = '';
   }
   const separators = Object.keys(SEPARATORS) as Separator[];
@@ -164,7 +179,7 @@
     const from = indexOf(item.id);
     const to = at > from ? at - 1 : at;
     phrase = move(phrase, item.id, to);
-    announcement = copy.compose.moved(phrase.tokens[to].text, to + 1, phrase.tokens.length);
+    announce(copy.compose.moved(phrase.tokens[to].text, to + 1, phrase.tokens.length));
     await tick();
     list.querySelector<HTMLElement>(`[data-handle="${item.id}"]`)?.focus();
   }
@@ -242,18 +257,22 @@
     phrase = edit(phrase, id, value);
   }
 
-  // An invalid edit is not in the phrase yet, so Remember would practise the old text: stay, and take the
-  // visitor to the field whose error says what to fix.
+  // An invalid word edit is not in the phrase yet, and an invalid length rule is not in the rules, so
+  // Remember would practise old text or miss a rule: stay, and take the visitor to the first field whose
+  // error says what to fix, opening the requirements section if it holds that field.
   function continueOn() {
-    const invalid = list.querySelector<HTMLInputElement>('input[aria-invalid="true"]');
-    if (invalid) invalid.focus();
-    else oncontinue();
+    const invalid = document.querySelector<HTMLInputElement>(
+      'ol.tokens input[aria-invalid="true"], details.requirements input[aria-invalid="true"]',
+    );
+    if (!invalid) return oncontinue();
+    const section = invalid.closest('details');
+    if (section) section.open = true;
+    invalid.focus();
   }
 
-  // A removal replaces whatever was last announced, so no stale "added" message stays in the live region.
   function removeAddedToken(token: Token) {
     change(removeAdded(phrase, token.id));
-    announcement = copy.compose.removed(token.text);
+    announce(copy.compose.removed(token.text));
   }
 
   // Joining, splitting and removing replace tokens, so a selection pointing at them is cleared.
@@ -267,6 +286,7 @@
     errors = {};
     placing = null;
     version++;
+    silence();
   }
 
   function startFresh() {
@@ -557,7 +577,7 @@
     const { [removing!.id]: _, ...rest } = errors;
     errors = rest;
     change(removeWord(phrase, removing!.id));
-    announcement = copy.compose.removed(removing!.text);
+    announce(copy.compose.removed(removing!.text));
     removing = null;
   }}
   oncancel={() => (removing = null)}

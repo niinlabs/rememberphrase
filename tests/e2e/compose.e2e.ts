@@ -459,8 +459,21 @@ test('your own word is added at the end, moves and edits like a tile, and never 
 
   await page.getByRole('button', { name: removeName('our 3rd!') }).click();
   await expect(preview(page)).toHaveText(words.join(' '));
-  // The live region now says what happened last, not the old "added at the end".
-  await expect(page.locator('p.visually-hidden[aria-live="polite"]')).toHaveText(copy.compose.removed('our 3rd!'));
+  // The live region says what happened last, then empties, so it never keeps a word that left the phrase.
+  const live = page.locator('p.visually-hidden[aria-live="polite"]');
+  await expect(live).toHaveText(copy.compose.removed('our 3rd!'));
+  await expect(live).toHaveText('', { timeout: 8000 });
+});
+
+test('Reset my changes empties the live region at once', async ({ page, context }) => {
+  await reachCompose(page, context);
+  const own = page.getByLabel(copy.compose.ownLabel, { exact: true });
+  await own.fill('pebble');
+  await own.press('Enter');
+  const live = page.locator('p.visually-hidden[aria-live="polite"]');
+  await expect(live).toHaveText(copy.compose.ownAdded('pebble'));
+  await page.getByRole('button', { name: copy.compose.reset }).click();
+  await expect(live).toHaveText('');
 });
 
 test('Continue does not leave while an edit is invalid: it goes to the field instead', async ({ page, context }) => {

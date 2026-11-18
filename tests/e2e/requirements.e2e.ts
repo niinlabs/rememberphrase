@@ -41,6 +41,14 @@ test('a length rule must be a whole number in range: 1e3 or 1.5 is refused with 
     await expect(page.getByText(copy.requirements.lengthError)).toBeVisible();
     await expect(page.getByTestId('checklist')).toHaveCount(0); // no rule, so no false Met
   }
+  // Continue stays while the rule is invalid, reopening the section to show the field.
+  await section(page).locator('summary').click();
+  await expect(section(page)).not.toHaveAttribute('open');
+  await page.getByRole('button', { name: copy.compose.continue }).click();
+  await expect(page.getByRole('heading', { level: 1, name: copy.compose.heading })).toBeVisible();
+  await expect(section(page)).toHaveAttribute('open');
+  await expect(min).toBeFocused();
+
   await min.clear();
   await min.pressSequentially('20');
   await expect(min).not.toHaveAttribute('aria-invalid');
