@@ -372,6 +372,7 @@ test('while dragging, a copy of the word follows the pointer and the other words
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text())); // a CSP block would show here
   const from = handle(page, words[0]);
+  await tiles(page).nth(3).scrollIntoViewIfNeeded(); // each step opens at the top, above the tiles
   const a = (await from.boundingBox())!;
   const b = (await tiles(page).nth(3).boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);

@@ -29,7 +29,6 @@
   let whole = $state(false); // the Reveal whole phrase escape hatch, separate from the aids
   let attempt = $state('');
   let masked = $state(true);
-  let result = $state<'mismatch' | null>(null); // only from Enter, as a match shows by itself
   let clearOpen = $state(false);
   let entry = $state<HTMLInputElement>();
 
@@ -101,8 +100,7 @@
   });
 
   // Exact comparison with the string the preview showed, so case, separators and symbols all count.
-  // A match shows as soon as it is typed, in every aid; how far off a wrong attempt is shows only with
-  // Follow along or Reveal as you type, while No aid and Connecting words say "doesn't match" on Enter.
+  // Every aid says as you type whether the attempt is on track, too long, wrong or a match.
   const live = $derived.by(() => {
     if (!attempt) return null;
     if (attempt === text) return 'match';
@@ -110,10 +108,8 @@
     return attempt.startsWith(text) ? 'long' : 'wrong';
   });
   const matched = $derived(live === 'match');
-  const shown = $derived(matched || aid === 'follow' || aid === 'reveal' ? live : result);
   const messages = {
     match: copy.remember.match,
-    mismatch: copy.remember.mismatch,
     wrong: copy.remember.live.wrong,
     short: copy.remember.live.short,
     long: copy.remember.live.long,
@@ -121,7 +117,6 @@
 
   function forget() {
     attempt = '';
-    result = null;
   }
 
   function nextAttempt() {
@@ -218,12 +213,9 @@
         spellcheck="false"
         data-1p-ignore
         data-lpignore="true"
-        oninput={(e) => {
-          attempt = e.currentTarget.value;
-          result = null;
-        }}
+        oninput={(e) => (attempt = e.currentTarget.value)}
         onkeydown={(e) => {
-          if (e.key === 'Enter' && attempt) matched ? nextAttempt() : (result = 'mismatch');
+          if (e.key === 'Enter' && matched) nextAttempt();
         }}
       />
       {#if attempt}
@@ -245,9 +237,9 @@
     </div>
 
     <!-- Red and green (approved 2026-11-05 for practice), always with an icon so colour is not the only signal. -->
-    <p class="result {shown}" role="status" data-testid="practice-result">
-      {#if shown === 'match'}<Icon name="check" size={20} />{:else if shown && shown !== 'short'}<Icon name="close" size={20} />{/if}
-      {shown ? messages[shown] : ''}
+    <p class="result {live}" role="status" data-testid="practice-result">
+      {#if live === 'match'}<Icon name="check" size={20} />{:else if live && live !== 'short'}<Icon name="close" size={20} />{/if}
+      {live ? messages[live] : ''}
     </p>
     <div class="actions">
       {#if matched}<button class="button primary" onclick={nextAttempt}>{copy.remember.retry}</button>{/if}
@@ -586,7 +578,6 @@
   .result.match {
     color: var(--green);
   }
-  .result.mismatch,
   .result.wrong,
   .result.long {
     color: var(--red);

@@ -173,10 +173,13 @@
     goTo('landing');
   }
 
+  // Every step starts at the top of the page: focusing the heading alone keeps a long page's scroll
+  // position on phones, leaving the visitor at the bottom of the new step.
   async function goTo(next: typeof step) {
     step = next;
     await tick();
-    document.getElementById('page-title')?.focus();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.getElementById('page-title')?.focus({ preventScroll: true });
   }
 
   // Nothing is stored, so leaving the page loses the prepared tab; ask first once the list is loaded.

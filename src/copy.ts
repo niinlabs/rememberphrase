@@ -276,7 +276,6 @@ export const copy = {
     live: { wrong: 'Wrong passphrase', short: 'Too short, keep going', long: 'Too long' },
     clearEntry: 'Clear entry',
     match: 'That matches your phrase exactly.',
-    mismatch: "That doesn't match yet. Check capitals, spaces and what sits between words.",
     retry: 'Next attempt',
     practiceLimits: "Your browser, its extensions and anyone who can see your screen are outside this page's control.",
     moreTitle: 'Want to know more?',

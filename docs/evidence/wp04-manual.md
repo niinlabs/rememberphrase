@@ -7,7 +7,7 @@ Open the site fresh (a new private window, or `pnpm preview:lan` on a phone).
 ## Steps
 
 1. On a phone and on a desktop, read the page top to bottom. Expected: the examples are readable, nothing is cut off, and **Start making a passphrase** is the only button in the main card.
-2. Using only the keyboard, Tab to **Start making a passphrase** and press Enter. Expected: Step 1 opens with the focus on its heading, and no word list is fetched until **Fetch words** is selected.
+2. Using only the keyboard, Tab to **Start making a passphrase** and press Enter. Expected: Step 1 opens at the top of the page with the focus on its heading, and no word list is fetched until **Fetch words** is selected. On a phone, scroll to the bottom first and tap the button: Step 1 still opens at the top, as does every later step.
 3. With a screen reader on (VoiceOver, NVDA or TalkBack), read the page. Expected: the order is heading, introduction, examples, the "Examples only" note, what happens next, then the button; each example story is read as separate words.
 4. At 200% browser zoom on a desktop, and with reduced motion switched on, read the page. Expected: no sideways scrolling and nothing clipped.
 5. Copy review (maintainer): the introduction, both examples, the "Examples only" note, "What happens next", the tab note and the "Before you start" panel. Decide whether one example would be enough. Expected: the wording is acceptable, or the changes needed are noted.

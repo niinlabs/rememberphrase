@@ -46,6 +46,16 @@ test('the one start button comes last and opens Step 1 with focus on its heading
   expect(prepRequests(requests)).toHaveLength(1);
 });
 
+test('on a phone, starting from the bottom of the introduction opens Step 1 at the top of the page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await start(page).scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await start(page).click();
+  await expect(step1Heading(page)).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test('the examples show six hand-picked list words arranged with connecting words, and are labelled not for use', async ({ page }) => {
   await page.goto('/');
   const stories = page.getByTestId('example-story');

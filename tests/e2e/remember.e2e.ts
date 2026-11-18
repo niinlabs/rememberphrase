@@ -75,7 +75,10 @@ test('practice starts with No aid and nothing of the phrase; Show connecting wor
   for (const a of ['follow', 'reveal'] as const) await expect(aid(page, a)).toBeVisible();
   await expect(withConnectors(page)).toHaveCount(0);
   await entry(page).fill(phrase.slice(0, 3));
-  await expect(result(page)).toHaveText(''); // without an aid, only a match or Enter gives a result
+  await expect(result(page)).toHaveText(copy.remember.live.short); // feedback as you type, even with No aid
+  await entry(page).fill(`${phrase.slice(0, 3)}#`);
+  await expect(result(page)).toHaveText(copy.remember.live.wrong);
+  await expect(rail(page)).toHaveCount(0); // still nothing of the phrase
 });
 
 test('Follow along shows the phrase faintly and lights it while the typing matches; a mistake stops it', async ({ page, context }) => {
@@ -197,11 +200,15 @@ test('the check is automatic and exact: case and separators count, and a mismatc
   await expect(page.getByRole('button', { name: /^Check$/ })).toHaveCount(0);
   const next = page.getByRole('button', { name: copy.remember.retry });
 
-  for (const wrong of [phrase.toUpperCase(), phrase.replaceAll(' ', '-'), `${phrase} `]) {
+  for (const [wrong, says] of [
+    [phrase.toUpperCase(), copy.remember.live.wrong],
+    [phrase.replaceAll(' ', '-'), copy.remember.live.wrong],
+    [`${phrase} `, copy.remember.live.long],
+  ]) {
     await entry(page).fill(wrong);
-    await expect(result(page)).toHaveText(''); // No aid: nothing about a wrong attempt until Enter
-    await entry(page).press('Enter');
-    await expect(result(page)).toHaveText(copy.remember.mismatch);
+    await expect(result(page)).toHaveText(says); // at once, with No aid too
+    await entry(page).press('Enter'); // Enter does nothing until it matches
+    await expect(entry(page)).toHaveValue(wrong);
     await expect(next).toHaveCount(0);
     await expect(page.getByTestId('reference-phrase')).toHaveCount(0);
   }
@@ -245,8 +252,7 @@ test('practice compares against the final phrase after edits, connecting words a
   await page.getByRole('button', { name: copy.compose.continue }).click();
 
   await entry(page).fill(plain);
-  await entry(page).press('Enter');
-  await expect(result(page)).toHaveText(copy.remember.mismatch);
+  await expect(result(page)).toHaveText(copy.remember.live.wrong);
   await entry(page).fill(final);
   await expect(result(page)).toHaveText(copy.remember.match);
 });

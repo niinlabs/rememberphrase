@@ -105,7 +105,7 @@ test('login requirements default to not specified and never promise acceptance',
 test('practice copy says the attempt stays in the tab and names what is outside the page', () => {
   expect(copy.remember.practiceIntro).toContain('not sent or saved');
   expect(copy.remember.practiceLimits).toMatch(/browser.*extensions.*screen/);
-  expect(copy.remember.mismatch).not.toMatch(/should be|correct phrase is/i);
+  expect(Object.values(copy.remember.live).join(' ')).not.toMatch(/should be|correct phrase is/i);
   expect(copy.remember.cleared).toContain('may still keep its own records');
 });
 
